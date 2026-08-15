@@ -29,10 +29,12 @@ class EventStore(context: Context) {
             if (value == null) editor.remove(key) else editor.putString(key, value)
         }
         editor.commit()
-        // Redrawn here rather than at the call site: every write goes through
-        // this one method, so a future writer cannot leave the home screen
-        // showing an Event the owner has already changed.
-        redrawWidgets(appContext)
+        // Drawn here rather than at the call site: every write goes through this
+        // one method, so a future writer cannot leave the home screen showing an
+        // Event the owner has already changed. The same call sets the Day
+        // Rollover alarm, so saving a change also puts back an alarm that is
+        // missing or aimed at the wrong instant.
+        drawDialForToday(appContext)
     }
 
     private companion object {

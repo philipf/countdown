@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
+      Alarms are dropped on reboot, so the one for the next Day Rollover has to
+      be set again once the phone is up. This is the only permission the app
+      asks for, and it is granted at install with nothing to accept.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
       Backup is off: the Event is one date, and restoring it onto a new phone is
       not worth the surface. allowBackup stops the cloud backup, but from Android
       12 it does not stop a device-to-device transfer, so the extraction rules
@@ -36,6 +43,27 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!--
+          The Day Rollover alarm is delivered here, and so are the three
+          broadcasts that mean the alarm can no longer be trusted: a reboot drops
+          it, and a clock or timezone change leaves it aimed at the wrong
+          instant. All four redraw the Dial and set the alarm again.
+
+          Not exported, like the widget above: all four come from the system,
+          whose broadcasts reach a manifest receiver whether or not it is
+          exported, and the alarm names this receiver directly. AndroidX
+          WorkManager's reboot receiver is declared the same way.
+        -->
+        <receiver
+            android:name=".DayRolloverReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
         </receiver>
 
     </application>

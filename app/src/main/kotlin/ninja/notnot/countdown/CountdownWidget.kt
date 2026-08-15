@@ -29,7 +29,11 @@ class CountdownWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        drawDial(context, appWidgetManager, appWidgetIds)
+        // Every copy shows the same Event, so this redraws all of them rather
+        // than only the ones named: it is the same work, and it is the call that
+        // also sets the Day Rollover alarm. Dropping the first copy on the home
+        // screen is what starts the days counting.
+        drawDialForToday(context)
     }
 
     /**
@@ -47,14 +51,27 @@ class CountdownWidget : AppWidgetProvider() {
 }
 
 /**
- * Redraws every copy of the widget.
+ * Draws today's Dial on every copy of the widget and sets the alarm for the next
+ * Day Rollover.
  *
- * [EventStore] calls this after every write, so a change saved in the app is on
- * the home screen at once and no future caller has to remember to ask.
+ * This is the only way in. Redrawing and re-arming are one call because half of
+ * it is a bug either way: a redraw with no alarm freezes the number until
+ * something else happens along, and an alarm with no redraw leaves yesterday's
+ * number where it is. [EventStore] calls this after every write and
+ * [DayRolloverReceiver] calls it for every broadcast it hears, and neither has
+ * to remember the other half.
  */
-fun redrawWidgets(context: Context) {
+fun drawDialForToday(context: Context) {
     val manager = AppWidgetManager.getInstance(context) ?: return
     val ids = manager.getAppWidgetIds(ComponentName(context, CountdownWidget::class.java))
+    // Before the redraw rather than after: a redraw that throws is one wrong
+    // Dial, but an alarm that was never set is every day after it.
+    //
+    // With no widget on the home screen there is nothing to redraw, so there is
+    // nothing to wake the phone for. Removing the last copy does not call this,
+    // so an alarm outlives it by up to a day and then cancels itself when it
+    // fires and finds nothing here.
+    if (ids.isEmpty()) cancelDayRollover(context) else armDayRollover(context)
     drawDial(context, manager, ids)
 }
 
