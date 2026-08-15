@@ -38,6 +38,26 @@
         </activity>
 
         <!--
+          Where a copy of the widget is bound to the Event it will show. The
+          launcher starts it when the widget is dropped, so it is exported: it is
+          reached from another app by definition. It takes nothing from the
+          intent but the appWidgetId the launcher put there and does nothing with
+          it but write a binding, so there is nothing here for another app to
+          abuse beyond placing a widget it could place anyway.
+
+          excludeFromRecents, because backing out of it leaves no widget behind
+          and so should leave nothing in the task switcher either.
+        -->
+        <activity
+            android:name=".ChooseEventActivity"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!--
           Not exported: the only thing that broadcasts an update to the widget is
           the system, which addresses this receiver by name. The app redraws the
           widget through AppWidgetManager rather than by broadcasting to itself.

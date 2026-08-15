@@ -13,11 +13,11 @@ import java.time.LocalDate
 /**
  * The home screen widget.
  *
- * Every copy shows the same Event — whichever one the list puts first — so a
- * copy has nothing of its own to configure: there is no configuration activity,
- * no per-instance state, and every copy of a given size is sent the same Dial.
- * Which Event that is, is arbitrary, and it stands only until a copy is bound to
- * an Event when it is placed (ADR-0009).
+ * Every copy shows the Event it was bound to when it was placed (ADR-0009), so
+ * two copies on two Events count to two different dates. The binding is the only
+ * thing a copy has of its own: it is made in [ChooseEventActivity], which the
+ * launcher opens when the copy is dropped, and it is forgotten again when the
+ * copy is removed.
  *
  * The layout is a single `ImageView` holding the bitmap from [renderDial], as
  * ADR-0002 has it, so the widget and the editor's preview cannot disagree.
@@ -31,10 +31,10 @@ class CountdownWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        // Every copy shows the same Event, so this redraws all of them rather
-        // than only the ones named: it is the same work, and it is the call that
-        // also sets the Day Rollover alarm. Dropping the first copy on the home
-        // screen is what starts the days counting.
+        // Redraws every copy rather than only the ones named. Each copy now
+        // costs a Dial of its own, but a broadcast asking for only some of them
+        // is rare, and this is the call that also sets the Day Rollover alarm,
+        // so doing the lot keeps that in one place.
         drawDialForToday(context)
     }
 
@@ -50,6 +50,19 @@ class CountdownWidget : AppWidgetProvider() {
     ) {
         drawDial(context, appWidgetManager, intArrayOf(appWidgetId))
     }
+
+    /**
+     * The copies named have been taken off the home screen, so what they were
+     * showing is nobody's business any more. Android reuses `appWidgetId`s, and
+     * a binding left behind would be inherited by whatever is placed next.
+     *
+     * Nothing is redrawn and no alarm is cancelled here: the copies that are
+     * left are still showing what they were, and an alarm that has outlived the
+     * last copy cancels itself when it fires and finds nothing to draw.
+     */
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        WidgetBindingStore(context).unbind(appWidgetIds)
+    }
 }
 
 /**
@@ -62,10 +75,16 @@ class CountdownWidget : AppWidgetProvider() {
  * number where it is. [EventStore] calls this after every write and
  * [DayRolloverReceiver] calls it for every broadcast it hears, and neither has
  * to remember the other half.
+ *
+ * [justPlaced] is the copy the chooser has this moment bound, which the launcher
+ * may not be listing yet. Nothing else sends that copy its first Dial — a
+ * configuration activity is expected to do that itself — so it is drawn with the
+ * rest rather than waited for.
  */
-fun drawDialForToday(context: Context) {
+fun drawDialForToday(context: Context, justPlaced: Int? = null) {
     val manager = AppWidgetManager.getInstance(context) ?: return
-    val ids = manager.getAppWidgetIds(ComponentName(context, CountdownWidget::class.java))
+    val listed = manager.getAppWidgetIds(ComponentName(context, CountdownWidget::class.java))
+    val ids = if (justPlaced == null || justPlaced in listed) listed else listed + justPlaced
     // Before the redraw rather than after: a redraw that throws is one wrong
     // Dial, but an alarm that was never set is every day after it.
     //
@@ -80,22 +99,23 @@ fun drawDialForToday(context: Context) {
 private fun drawDial(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
     if (appWidgetIds.isEmpty()) return
 
-    // Read on the calling thread. This runs in a broadcast receiver, where
-    // blocking is simpler and safer than a coroutine.
-    //
-    // Whichever Event the list puts first, which is the one the owner is nearest
-    // to. Temporary: a widget shows the Event it was bound to when it was placed
-    // (ADR-0009), and until that binding exists there is nothing here to choose
-    // with. No Event at all draws the same Dial as a first run.
-    val stored = eventsInOrder(EventStore(context).read()).firstOrNull()?.stored
-    val state = dialState(stored?.toEvent(), LocalDate.now())
+    // Both read on the calling thread. This runs in a broadcast receiver, where
+    // blocking is simpler and safer than a coroutine. The whole of both files is
+    // read to draw whatever these copies need: at this size that is cheaper than
+    // being clever about it.
+    val events = EventStore(context).read()
+    val boundTo = WidgetBindingStore(context).read()
     val density = context.resources.displayMetrics.density
 
-    // Every copy shows the same Event, so copies of the same size still share
-    // one bitmap and one update. Only a copy dragged to a different size needs
-    // one of its own.
-    for ((sizePx, ids) in appWidgetIds.groupBy { dialSizeOf(manager, it, density) }) {
-        send(context, manager, ids.toIntArray(), state, sizePx)
+    val placed = appWidgetIds.map {
+        PlacedWidget(it, boundTo[it], dialSizeOf(manager, it, density))
+    }
+
+    // Grouped by the Dial that comes out, so two copies on the same Event at the
+    // same size still share one bitmap and one update. Only a copy on a
+    // different Event, or dragged to a different size, costs one of its own.
+    for (dial in dialsToDraw(placed, events, LocalDate.now())) {
+        send(context, manager, dial.appWidgetIds.toIntArray(), dial.state, dial.sizePx)
     }
 }
 

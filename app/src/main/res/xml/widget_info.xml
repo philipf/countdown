@@ -2,8 +2,16 @@
 <!--
   What the launcher is told about the widget.
 
-  There is no android:configure, because one Event app-wide leaves a copy of the
-  widget nothing to configure: dropping it shows the Event straight away.
+  android:configure names the chooser. There are many Events, so a copy has to be
+  told which one it shows: dropping it opens the chooser, and the Event picked
+  there is the one that copy counts to for as long as it is on the home screen
+  (ADR-0009). Placement is two steps because of it. The name is spelled out in
+  full because this is a component name rather than a class in some package this
+  file knows about.
+
+  There is no widgetFeatures="reconfigurable": Android's reconfigurable widgets
+  are 12 and up while minSdk is 26, so half the supported range could not have
+  it. Removing the copy and placing another does the same thing.
 
   updatePeriodMillis is 0 — nothing here runs on a timer. The app redraws the
   widget when the Event changes, and midnight is a separate job.
@@ -21,6 +29,7 @@
   device and there is no widget yet to render it for.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="ninja.notnot.countdown.ChooseEventActivity"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_dial"
     android:minHeight="110dp"

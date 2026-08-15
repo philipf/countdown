@@ -1,11 +1,13 @@
 package ninja.notnot.countdown
 
+import kotlin.text.RegexOption.DOT_MATCHES_ALL
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.fail
 
 /**
  * The widget's two real decisions — how big a square the widget gives the Dial,
@@ -18,8 +20,8 @@ import org.junit.jupiter.api.Test
  *
  * The declarations are checked as text because there is no other way to see them
  * without a device, and because several of the acceptance criteria — resizable,
- * 2x2 minimum and default, no configuration activity, a single centred
- * ImageView — are entirely decided by them.
+ * 2x2 minimum and default, a chooser on placement, a single centred ImageView —
+ * are entirely decided by them.
  */
 class WidgetTest {
 
@@ -203,8 +205,19 @@ class WidgetTest {
         }
 
         @Test
-        fun `there is no configuration activity, so dropping the widget just works`() {
-            assertNull(Regex("""android:configure""").find(widgetInfo)?.value)
+        fun `dropping the widget opens the chooser, which is what binds it to an Event`() {
+            assertTrue(
+                widgetInfo.contains("""android:configure="$CHOOSER""""),
+                "nothing would ask which Event the copy is for",
+            )
+            assertTrue(chooserDeclaration.contains("android.appwidget.action.APPWIDGET_CONFIGURE"))
+            // The launcher starts it, and the launcher is another app.
+            assertTrue(chooserDeclaration.contains("""android:exported="true""""))
+        }
+
+        @Test
+        fun `the widget is not offered as reconfigurable, which minSdk cannot have`() {
+            assertNull(Regex("""android:widgetFeatures""").find(widgetInfo)?.value)
         }
 
         @Test
@@ -250,6 +263,54 @@ class WidgetTest {
                 "the new size has to come from the widget's options",
             )
         }
+
+        @Test
+        fun `a removed copy takes its binding with it`() {
+            // Android hands out appWidgetIds again, so a binding left behind
+            // would be inherited by whatever is placed next.
+            assertTrue(appSource("CountdownWidget.kt").contains("override fun onDeleted"))
+        }
+    }
+
+    /**
+     * The order the chooser does things in, which is what decides whether a
+     * widget can end up on the home screen showing nothing. There is no way to
+     * see it without a launcher, so it is read out of the source.
+     */
+    @Nested
+    @DisplayName("Placing a widget")
+    inner class Placing {
+
+        @Test
+        fun `backing out of the chooser leaves no widget behind`() {
+            // The launcher drops the copy unless it is told otherwise, so the
+            // refusal is in place before there is any way out of the screen.
+            assertTrue(
+                chooser.indexOf("setResult(RESULT_CANCELED") in
+                    0 until chooser.indexOf("setContent {"),
+                "backing out would leave a widget bound to nothing",
+            )
+        }
+
+        @Test
+        fun `the binding is on disk before the launcher is told to keep the copy`() {
+            assertTrue(
+                chooser.indexOf(".bind(") in 0 until chooser.indexOf("setResult(RESULT_OK"),
+                "an OK with no binding behind it leaves a widget pointing at nothing",
+            )
+        }
+
+        @Test
+        fun `the chooser draws the copy it has just bound`() {
+            // A configuration activity is expected to send that first update
+            // itself: no APPWIDGET_UPDATE follows it.
+            assertTrue(chooser.contains("drawDialForToday"))
+        }
+
+        @Test
+        fun `the chooser offers the Events in the order the app shows them`() {
+            assertTrue(chooser.contains("eventsInOrder"))
+        }
     }
 
     private companion object {
@@ -269,10 +330,21 @@ class WidgetTest {
             2208 to 1840,
         )
 
+        /** What android:configure has to name, spelled out as a component name. */
+        const val CHOOSER = "ninja.notnot.countdown.ChooseEventActivity"
+
         val widgetInfo: String get() = widgetInfoXml()
 
         val layout: String get() = layoutXml("widget_dial")
 
         val manifest: String get() = manifestXml()
+
+        val chooser: String get() = appSource("ChooseEventActivity.kt")
+
+        /** What the manifest says about the chooser, and nothing else. */
+        val chooserDeclaration: String
+            get() = Regex("""<activity\b[^>]*ChooseEventActivity\b.*?</activity>""", DOT_MATCHES_ALL)
+                .find(manifest)?.value
+                ?: fail("the chooser is not declared in the manifest")
     }
 }
