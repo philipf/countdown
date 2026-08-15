@@ -1,0 +1,14 @@
+# Toolchain — the Android SDK lives in the repo but is never committed
+/.android-sdk/
+
+# Signing — the keystore lives outside the repo, its details are local only
+/keystore.properties
+
+# Gradle
+/.gradle/
+build/
+local.properties
+
+# Build output
+*.apk
+*.aab

@@ -1,0 +1,60 @@
+# Toolchain for the whole project. `mise install` is the only setup step.
+# The JDK is pinned to Java 21: Java 25 is the newer LTS but the Android Gradle
+# Plugin does not support it yet.
+
+[tools]
+java = "temurin-21.0.12"
+gradle = "9.7.0"
+# Android command line tools, which provide sdkmanager. The postinstall hook
+# then uses sdkmanager to fill ANDROID_HOME, so `mise install` is enough.
+"android-sdk" = { version = "22.0", postinstall = "mise run sdk" }
+
+[env]
+# The SDK lives in the repo and is gitignored, so nothing lands system-wide.
+ANDROID_HOME = "{{config_root}}/.android-sdk"
+ANDROID_SDK_ROOT = "{{config_root}}/.android-sdk"
+# Ahead of the mise install dir, so sdkmanager and avdmanager resolve the SDK
+# in the repo rather than an empty one next to themselves.
+_.path = [
+  "{{config_root}}/.android-sdk/cmdline-tools/latest/bin",
+  "{{config_root}}/.android-sdk/platform-tools",
+]
+
+[tasks.sdk]
+description = "Install the Android SDK packages into ANDROID_HOME"
+run = """
+set -e
+# The tools resolve the SDK from their own location, not from ANDROID_HOME, so
+# they have to live inside it or they read an empty SDK and say nothing useful.
+mkdir -p "$ANDROID_HOME/cmdline-tools"
+rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+cp -r "$(dirname "$(dirname "$(command -v sdkmanager)")")" "$ANDROID_HOME/cmdline-tools/latest"
+
+sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+yes | "$sdkmanager" --licenses > /dev/null
+"$sdkmanager" \
+  "platform-tools" \
+  "build-tools;37.0.0" \
+  "platforms;android-37.1"
+"""
+
+[tasks.keystore]
+description = "Generate the release keystore outside the repo and write keystore.properties"
+run = "./tools/make-keystore.sh"
+
+[tasks.build]
+description = "Build the signed release APK"
+run = "gradle :app:assembleRelease"
+
+[tasks.test]
+description = "Run the JVM unit tests"
+run = "gradle :app:testDebugUnitTest"
+
+[tasks.install]
+description = "Install the release APK on the connected device and launch it"
+depends = ["build"]
+run = """
+set -e
+adb install -r app/build/outputs/apk/release/app-release.apk
+adb shell am start -n ninja.notnot.countdown/.MainActivity
+"""
