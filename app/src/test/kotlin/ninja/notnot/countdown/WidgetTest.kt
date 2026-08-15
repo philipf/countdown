@@ -273,6 +273,50 @@ class WidgetTest {
     }
 
     /**
+     * What the widget tidies up after itself. All of it is disk and home screen,
+     * so it is read out of the source rather than run.
+     */
+    @Nested
+    @DisplayName("Looking after the bindings")
+    inner class Housekeeping {
+
+        @Test
+        fun `removing a copy reaches the bindings and nothing else`() {
+            // What the copy was showing is not the copy's to take with it.
+            val onDeleted = Regex("""override fun onDeleted.*?\n    \}""", DOT_MATCHES_ALL)
+                .find(widget)?.value
+                ?: fail("nothing forgets a copy that has been removed")
+
+            assertTrue(onDeleted.contains("WidgetBindingStore"))
+            assertNull(Regex("""EventStore""").find(onDeleted)?.value, "an Event must be untouched")
+        }
+
+        @Test
+        fun `a removal that was never heard about is swept on the next redraw`() {
+            // onDeleted is a broadcast and a broadcast can be missed. The redraw
+            // has just asked the framework what is on the home screen, so it is
+            // the one place that can tell which bindings are for copies that
+            // have gone.
+            val redraw = Regex("""fun drawDialForToday.*?\n\}""", DOT_MATCHES_ALL)
+                .find(widget)?.value
+                ?: fail("there is no redraw to sweep from")
+
+            assertTrue(redraw.contains("keepOnly(ids)"), "a stale binding would live on")
+        }
+
+        @Test
+        fun `a copy opens the app when it is tapped, whatever it is showing`() {
+            // Including a copy whose Event has been deleted: it says "Set a
+            // date", and tapping it is how the owner sets one. There is one
+            // place a Dial is built and it always sets the tap, so no Dial goes
+            // out without it.
+            assertEquals(1, Regex("""RemoteViews\(""").findAll(widget).count())
+            assertEquals(1, Regex("""setOnClickPendingIntent\(""").findAll(widget).count())
+            assertTrue(widget.contains("MainActivity"), "the tap has to open the app")
+        }
+    }
+
+    /**
      * The order the chooser does things in, which is what decides whether a
      * widget can end up on the home screen showing nothing. There is no way to
      * see it without a launcher, so it is read out of the source.
@@ -340,6 +384,8 @@ class WidgetTest {
         val manifest: String get() = manifestXml()
 
         val chooser: String get() = appSource("ChooseEventActivity.kt")
+
+        val widget: String get() = appSource("CountdownWidget.kt")
 
         /** What the manifest says about the chooser, and nothing else. */
         val chooserDeclaration: String

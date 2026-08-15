@@ -58,6 +58,23 @@ fun Map<String, String?>.withoutBindings(appWidgetIds: List<Int>): Map<String, S
     this + appWidgetIds.associate { WidgetKeys.keyFor(it) to null }
 
 /**
+ * The file with every binding taken away whose copy is not in [stillPlaced] —
+ * the copies the framework says are on the home screen.
+ *
+ * This is the sweep behind [withoutBindings]. Removing a copy tells the app so
+ * through a broadcast, and a broadcast can be missed: the app can be
+ * force-stopped, or its data cleared while the copies stay where they are. A
+ * binding that outlives its copy is inherited by the next copy Android hands the
+ * same `appWidgetId` to, so whatever onDeleted did not take away is taken away
+ * here, on the next redraw.
+ *
+ * Every key that names a copy goes, whatever is behind it, so a binding left
+ * half-written goes with the rest.
+ */
+fun Map<String, String?>.withoutBindingsBeyond(stillPlaced: Set<Int>): Map<String, String?> =
+    withoutBindings(keys.mapNotNull(WidgetKeys::appWidgetIdIn).filterNot { it in stillPlaced })
+
+/**
  * One copy of the widget on the home screen: which Event it is bound to, if any,
  * and how big a Dial it has room for.
  */
@@ -65,6 +82,18 @@ data class PlacedWidget(val appWidgetId: Int, val boundTo: EventId?, val dialSiz
 
 /** One Dial to draw once, and the copies of the widget it is sent to. */
 data class DialToDraw(val state: DialState, val sizePx: Int, val appWidgetIds: List<Int>)
+
+/**
+ * The Event a copy of the widget shows, or null when it has none to show.
+ *
+ * There are two ways to have none, and they answer the same on purpose: a copy
+ * that was never bound to anything, and a copy whose Bound Event has since been
+ * deleted. Neither is an error and neither is worth telling apart on the home
+ * screen — what the second one must not do is go on standing there with the last
+ * number it was given for an Event that is gone.
+ */
+fun eventShownBy(copy: PlacedWidget, events: Map<EventId, StoredEvent>): Event? =
+    copy.boundTo?.let(events::get)?.toEvent()
 
 /**
  * What to draw on every copy of the widget: each copy's Bound Event, as a Dial,
@@ -86,9 +115,7 @@ fun dialsToDraw(
     today: LocalDate,
 ): List<DialToDraw> =
     placed
-        .groupBy { copy ->
-            dialState(copy.boundTo?.let(events::get)?.toEvent(), today) to copy.dialSizePx
-        }
+        .groupBy { copy -> dialState(eventShownBy(copy, events), today) to copy.dialSizePx }
         .map { (dial, copies) ->
             DialToDraw(dial.first, dial.second, copies.map { it.appWidgetId })
         }

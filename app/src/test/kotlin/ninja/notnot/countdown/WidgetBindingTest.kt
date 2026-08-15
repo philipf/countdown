@@ -83,6 +83,79 @@ class WidgetBindingTest {
         }
 
         @Test
+        fun `a copy that is no longer on the home screen is forgotten`() {
+            // The sweep behind onDeleted, for the copies whose removal the app
+            // never heard about.
+            val values = emptyValues()
+                .withBinding(7, EventId("christmas"))
+                .withBinding(8, EventId("holiday"))
+                .withoutBindingsBeyond(stillPlaced = setOf(8))
+
+            assertEquals(mapOf(8 to EventId("holiday")), boundEventsFrom(values))
+            assertNull(values[WidgetKeys.keyFor(7)], "the key has to go, not just its value")
+        }
+
+        @Test
+        fun `a copy that is still on the home screen keeps its binding`() {
+            val values = emptyValues()
+                .withBinding(7, EventId("christmas"))
+                .withoutBindingsBeyond(stillPlaced = setOf(7, 8, 9))
+
+            assertEquals(mapOf(7 to EventId("christmas")), boundEventsFrom(values))
+        }
+
+        @Test
+        fun `nothing on the home screen leaves no bindings behind`() {
+            val values = emptyValues()
+                .withBinding(7, EventId("christmas"))
+                .withBinding(8, EventId("holiday"))
+                .withoutBindingsBeyond(stillPlaced = emptySet())
+
+            assertEquals(emptyMap<Int, EventId>(), boundEventsFrom(values))
+        }
+
+        @Test
+        fun `an appWidgetId handed out again inherits nothing from the copy before it`() {
+            // The copy on 7 has gone without onDeleted being heard. The next
+            // redraw sweeps it, so the copy Android gives 7 to next starts with
+            // no Event rather than with one it never chose.
+            val swept = emptyValues()
+                .withBinding(7, EventId("christmas"))
+                .withoutBindingsBeyond(stillPlaced = emptySet())
+
+            assertNull(boundEventsFrom(swept)[7])
+            assertEquals(
+                mapOf(7 to EventId("holiday")),
+                boundEventsFrom(swept.withBinding(7, EventId("holiday"))),
+            )
+        }
+
+        @Test
+        fun `the sweep leaves everything that is not a binding alone`() {
+            val values = mapOf<String, String?>("settings" to "something", "widget.7" to "christmas")
+                .withoutBindingsBeyond(stillPlaced = emptySet())
+
+            assertEquals("something", values["settings"])
+        }
+
+        @Test
+        fun `a binding left half-written is swept like any other`() {
+            val values = mapOf<String, String?>("widget.7" to "")
+                .withoutBindingsBeyond(stillPlaced = emptySet())
+
+            assertNull(values[WidgetKeys.keyFor(7)])
+        }
+
+        @Test
+        fun `a sweep with nothing to forget hands back the file it was given`() {
+            // Every redraw sweeps, so the usual answer has to be unchanged: the
+            // store writes only when this comes back different.
+            val values = emptyValues().withBinding(7, EventId("christmas"))
+
+            assertEquals(values, values.withoutBindingsBeyond(stillPlaced = setOf(7)))
+        }
+
+        @Test
         fun `a key that is not a binding is left alone rather than read as one`() {
             val values = mapOf(
                 "widget.7" to "christmas",
@@ -118,6 +191,50 @@ class WidgetBindingTest {
             assertNull(WidgetKeys.appWidgetIdIn(EventKeys.EVENTS))
             assertNull(WidgetKeys.appWidgetIdIn(EventKeys.keyFor(EventId("abc"), EventKeys.TITLE)))
             assertTrue(eventIdsFrom(mapOf(key to "christmas")).isEmpty())
+        }
+    }
+
+    @Nested
+    @DisplayName("Which Event a copy of the widget shows")
+    inner class Resolving {
+
+        @Test
+        fun `a bound copy shows the Event it is bound to`() {
+            val copy = PlacedWidget(7, EventId("christmas"), dialSizePx = 220)
+
+            assertEquals(events.getValue(EventId("christmas")).toEvent(), eventShownBy(copy, events))
+        }
+
+        @Test
+        fun `a copy with no binding shows no Event`() {
+            assertNull(eventShownBy(PlacedWidget(7, null, dialSizePx = 220), events))
+        }
+
+        @Test
+        fun `a copy bound to an Event that has been deleted shows no Event`() {
+            // Not an error and not distinguishable from never having been bound:
+            // what matters is that it stops showing the Event that is gone.
+            assertNull(eventShownBy(PlacedWidget(7, EventId("gone"), 220), events))
+        }
+
+        @Test
+        fun `an Event being deleted reaches only the copies bound to it`() {
+            val christmas = PlacedWidget(7, EventId("christmas"), dialSizePx = 220)
+            val holiday = PlacedWidget(8, EventId("holiday"), dialSizePx = 220)
+            val afterDelete = events - EventId("christmas")
+
+            assertNull(eventShownBy(christmas, afterDelete))
+            assertEquals(eventShownBy(holiday, events), eventShownBy(holiday, afterDelete))
+        }
+
+        @Test
+        fun `resolving is what the drawing is built on, so they cannot disagree`() {
+            for (boundTo in listOf(EventId("christmas"), EventId("gone"), null)) {
+                val copy = PlacedWidget(7, boundTo, dialSizePx = 220)
+                val dials = dialsToDraw(listOf(copy), events, TODAY)
+
+                assertEquals(dialState(eventShownBy(copy, events), TODAY), dials.single().state)
+            }
         }
     }
 
@@ -191,13 +308,33 @@ class WidgetBindingTest {
 
         @Test
         fun `a copy bound to an Event that has been deleted says to set a date`() {
+            // The whole Dial goes, not only the number: an arc still standing at
+            // three quarters, or the deleted Event's title under it, would say
+            // the Event is still being counted to.
             val dials = dialsToDraw(
                 listOf(PlacedWidget(7, EventId("gone"), dialSizePx = 220)),
                 events,
                 TODAY,
             )
+            val state = dials.single().state
 
-            assertEquals("Set a date", dials.single().state.primaryText)
+            assertEquals("Set a date", state.primaryText)
+            assertNull(state.labelText)
+            assertEquals(0f, state.arcFraction)
+            assertNull(state.title)
+        }
+
+        @Test
+        fun `deleting the Event a copy shows changes that copy and no other`() {
+            val placed = listOf(
+                PlacedWidget(7, EventId("christmas"), dialSizePx = 220),
+                PlacedWidget(8, EventId("holiday"), dialSizePx = 220),
+            )
+
+            val after = dialsToDraw(placed, events - EventId("christmas"), TODAY)
+
+            assertEquals(dialState(null, TODAY), after.single { 7 in it.appWidgetIds }.state)
+            assertEquals("Holiday", after.single { 8 in it.appWidgetIds }.state.title)
         }
 
         @Test

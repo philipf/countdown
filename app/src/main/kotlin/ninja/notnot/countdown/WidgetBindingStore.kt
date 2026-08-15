@@ -5,8 +5,9 @@ import android.content.SharedPreferences
 
 /**
  * The Bound Events on disk: which Event each copy of the widget shows. What goes
- * in and what comes out is decided by [boundEventsFrom], [withBinding] and
- * [withoutBindings]; this is only the reads and writes, and it decides nothing.
+ * in and what comes out is decided by [boundEventsFrom], [withBinding],
+ * [withoutBindings] and [withoutBindingsBeyond]; this is only the reads and
+ * writes, and it decides nothing.
  *
  * Its own file rather than a corner of the Events' one, because the two have
  * different lifetimes (ADR-0009): removing a widget must not touch an Event, and
@@ -35,6 +36,21 @@ class WidgetBindingStore(context: Context) {
     fun unbind(appWidgetIds: IntArray) {
         val before = values()
         save(before, before.withoutBindings(appWidgetIds.toList()))
+    }
+
+    /**
+     * Forgets every copy but [stillPlaced], which is what is on the home screen
+     * now. This runs on every redraw, so a binding onDeleted never heard about
+     * is gone by the time its `appWidgetId` is handed out again.
+     *
+     * Nothing is written when there is nothing to forget, which is almost always
+     * — a redraw happens for every Day Rollover and every edit, and it should
+     * not touch the disk to find out that all is well.
+     */
+    fun keepOnly(stillPlaced: IntArray) {
+        val before = values()
+        val after = before.withoutBindingsBeyond(stillPlaced.toSet())
+        if (after != before) save(before, after)
     }
 
     /**

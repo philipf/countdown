@@ -26,6 +26,13 @@ pointing at nothing.
 file grows without limit and a recycled id inherits whatever the last widget was
 showing.
 
+`onDeleted` is a broadcast, though, and a broadcast can be missed — the app can
+be force-stopped, or have its data cleared while the widgets stay where they are.
+So the redraw sweeps as well: it already asks `AppWidgetManager` which copies are
+on the home screen, and every binding that is not one of them goes before the
+Dials do. That is the only moment the app can tell a stale binding from a live
+one, and it costs a disk write only when there is something to remove.
+
 An Event can still be deleted while a widget shows it. That widget then reads as
 unbound and draws the same Dial as a first run — "Set a date" — and tapping it
 opens the app. Refusing the deletion, or warning about it, would make the app

@@ -56,9 +56,16 @@ class CountdownWidget : AppWidgetProvider() {
      * showing is nobody's business any more. Android reuses `appWidgetId`s, and
      * a binding left behind would be inherited by whatever is placed next.
      *
+     * Only the bindings are touched. The Events outlive the home screen, so a
+     * copy being taken off it must not take an Event with it.
+     *
      * Nothing is redrawn and no alarm is cancelled here: the copies that are
      * left are still showing what they were, and an alarm that has outlived the
      * last copy cancels itself when it fires and finds nothing to draw.
+     *
+     * This is not the only thing that forgets a copy. It is a broadcast and a
+     * broadcast can be missed, so [drawDialForToday] sweeps what it did not
+     * hear about.
      */
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         WidgetBindingStore(context).unbind(appWidgetIds)
@@ -93,6 +100,11 @@ fun drawDialForToday(context: Context, justPlaced: Int? = null) {
     // so an alarm outlives it by up to a day and then cancels itself when it
     // fires and finds nothing here.
     if (ids.isEmpty()) cancelDayRollover(context) else armDayRollover(context)
+    // The framework has just said what is on the home screen, so this is the one
+    // moment the app can tell which bindings are for copies that are gone.
+    // onDeleted takes away the ones it hears about; this takes away the ones it
+    // did not, so nothing is left for a recycled appWidgetId to inherit.
+    WidgetBindingStore(context).keepOnly(ids)
     drawDial(context, manager, ids)
 }
 
