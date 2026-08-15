@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The background layer of the launcher icon: the Dial's white disc, filling the
+  layer so that whatever shape the launcher's mask cuts is the disc.
+
+  An adaptive icon is 108 units square and every mask is cut from the middle of
+  it, so the disc is not drawn as a circle here. Drawing one would leave the
+  mask cutting a circle out of a circle and a white sliver short of the edge.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+
+</vector>

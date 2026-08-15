@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What a themed launcher draws instead of the foreground: the same arc and the
+  same number, in black, for the system to tint with the wallpaper's colour.
+
+  The unfilled part of the arc is left out. It is a faint wash of the Accent on
+  the Dial, and tinted flat with everything else it would close the arc into a
+  full circle, which says nothing about how much time has passed.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M54,25 A29,29 0 1 1 25,54"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+
+    <path
+        android:pathData="M44,41 L64,41 L52,67"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="6" />
+
+</vector>

@@ -13,6 +13,12 @@
   WidgetSizing.kt, which is the size the Dial falls back to when a launcher
   reports nothing. There is no maximum: the Dial is drawn again at whatever size
   the widget is dragged to.
+
+  The picker is given a preview twice over. previewLayout is the modern one and
+  is drawn at the size the widget will land at, but it is Android 12 and up;
+  minSdk is 26, so previewImage is what everything older reads. Both show the
+  same drawing of the Dial, because the real one is a bitmap rendered on a
+  device and there is no widget yet to render it for.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
@@ -21,6 +27,8 @@
     android:minResizeHeight="110dp"
     android:minResizeWidth="110dp"
     android:minWidth="110dp"
+    android:previewImage="@drawable/dial_preview"
+    android:previewLayout="@layout/widget_dial_preview"
     android:resizeMode="horizontal|vertical"
     android:targetCellHeight="2"
     android:targetCellWidth="2"

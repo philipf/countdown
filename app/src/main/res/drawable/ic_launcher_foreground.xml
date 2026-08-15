@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The foreground layer of the launcher icon: the Progress Arc and a number, over
+  the white disc the background layer provides.
+
+  Everything is inside the 66-unit circle at the centre of these 108, which is
+  the safe zone a round, square or squircle mask all leave alone. That is why
+  the arc is not quite on the rim the way the Dial's is: on the rim it would be
+  cut. The mask's own edge is the rim instead.
+
+  The arc is a shade heavier than the Dial's, for the same reason: shrunk to the
+  48dp a launcher draws, a faithful stroke is a hairline. IconTest holds the
+  colours to the Dial's own, which is the part that would otherwise drift.
+
+  The number is one digit, because two are unreadable at that size, and drawn as
+  a path because a vector drawable has no text. Seven is a week.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The part of the arc still to fill. -->
+    <path
+        android:pathData="M25,54 A29,29 0 1 0 83,54 A29,29 0 1 0 25,54"
+        android:strokeColor="#240288D1"
+        android:strokeWidth="7" />
+
+    <!-- The part filled: from twelve o'clock, clockwise, like the Dial's. -->
+    <path
+        android:pathData="M54,25 A29,29 0 1 1 25,54"
+        android:strokeColor="#FF0288D1"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+
+    <path
+        android:pathData="M44,41 L64,41 L52,67"
+        android:strokeColor="#FF212121"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="6" />
+
+</vector>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the widget picker shows on Android 12 and up: the same single ImageView
+  the widget itself is, holding a drawing of the Dial instead of a rendered one.
+
+  No background here either, so the preview sits on the picker's sheet the way
+  the widget sits on the wallpaper.
+-->
+<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:contentDescription="@string/widget_description"
+    android:scaleType="fitCenter"
+    android:src="@drawable/dial_preview" />

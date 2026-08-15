@@ -214,9 +214,7 @@ class WidgetTest {
 
         @Test
         fun `the layout is a single ImageView`() {
-            val tags = Regex("""<([A-Za-z][\w.]*)""").findAll(layout).map { it.groupValues[1] }
-
-            assertEquals(listOf("ImageView"), tags.toList())
+            assertEquals(listOf("ImageView"), tagsIn(layout))
         }
 
         @Test
@@ -271,10 +269,10 @@ class WidgetTest {
             2208 to 1840,
         )
 
-        val widgetInfo: String get() = withoutComments(appFile("src/main/res/xml/widget_info.xml"))
+        val widgetInfo: String get() = widgetInfoXml()
 
-        val layout: String get() = withoutComments(appFile("src/main/res/layout/widget_dial.xml"))
+        val layout: String get() = layoutXml("widget_dial")
 
-        val manifest: String get() = withoutComments(appFile("src/main/AndroidManifest.xml"))
+        val manifest: String get() = manifestXml()
     }
 }

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Dial as the widget picker shows it, before there is a widget to draw.
+
+  The real Dial is a bitmap rendered on a device, so the picker cannot be given
+  one. This is that drawing done again as a vector, and every proportion in it
+  comes from dialLayout() at a size of 108: the disc fills the square, the
+  Progress Arc is 0.075 of the diameter thick and sits half a stroke inside the
+  rim, and it starts at twelve o'clock. IconTest checks each of those against
+  dialLayout() itself, so the picker cannot promise a shape the widget does not
+  draw.
+
+  What is not from the Dial is the number: a vector drawable has no text, so the
+  digit is a path, and the label under it is left out rather than drawn as four
+  more. The Event's title is left out for the same reason — the picker has no
+  Event to name yet.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M0,54 A54,54 0 1 0 108,54 A54,54 0 1 0 0,54 Z" />
+
+    <!-- The part of the arc still to fill. -->
+    <path
+        android:pathData="M4.05,54 A49.95,49.95 0 1 0 103.95,54 A49.95,49.95 0 1 0 4.05,54"
+        android:strokeColor="#240288D1"
+        android:strokeWidth="8.1" />
+
+    <!-- The part filled: from twelve o'clock, clockwise. -->
+    <path
+        android:pathData="M54,4.05 A49.95,49.95 0 1 1 4.05,54"
+        android:strokeColor="#FF0288D1"
+        android:strokeLineCap="round"
+        android:strokeWidth="8.1" />
+
+    <path
+        android:pathData="M45,43 L63,43 L51,65"
+        android:strokeColor="#FF212121"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="5" />
+
+</vector>
