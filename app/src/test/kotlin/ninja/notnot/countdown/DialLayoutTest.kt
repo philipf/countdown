@@ -118,19 +118,22 @@ class DialLayoutTest {
     inner class Palette {
 
         @Test
-        fun `every Accent stands out against the white disc`() {
-            for (accent in Accent.entries) {
-                val contrast = contrastAgainstWhite(accent.argb)
+        fun `every Accent offered stands out against the white disc`() {
+            // The rule is on the colours the editor offers. An Accent can be any
+            // colour, and nothing stops a colour arriving from somewhere else,
+            // but nothing the app puts in front of the owner is invisible.
+            for (offered in NamedAccent.entries) {
+                val contrast = contrastAgainstWhite(offered.accent.argb)
 
-                assertTrue(contrast >= 3.0, "$accent is only $contrast against white")
+                assertTrue(contrast >= 3.0, "$offered is only $contrast against white")
             }
         }
 
         @Test
         fun `yellow is dark enough to read, where the yellow a palette usually has is not`() {
             assertTrue(
-                contrastAgainstWhite(Accent.YELLOW.argb) >= 3.0,
-                "yellow is ${contrastAgainstWhite(Accent.YELLOW.argb)} against white",
+                contrastAgainstWhite(NamedAccent.YELLOW.accent.argb) >= 3.0,
+                "yellow is ${contrastAgainstWhite(NamedAccent.YELLOW.accent.argb)} against white",
             )
             // The obvious yellow, and the reason the palette's is a dark gold: a
             // rule that let this one through would be saying nothing.
@@ -149,8 +152,11 @@ class DialLayoutTest {
         }
 
         @Test
-        fun `the arc track is the Accent, faded`() {
-            for (accent in Accent.entries) {
+        fun `the arc track is the Accent, faded, whatever the colour is`() {
+            // Every colour the editor offers, and a spread of colours it does
+            // not: the track is worked out from the Accent's own hue and the
+            // app's own alpha, so a colour nobody named gets one the same way.
+            for (accent in NamedAccent.entries.map { it.accent } + UNNAMED_COLOURS) {
                 val track = trackColour(accent)
 
                 assertEquals(accent.argb and 0x00FFFFFF, track and 0x00FFFFFF, "$accent changed hue")
@@ -166,12 +172,12 @@ class DialLayoutTest {
             // unfinished rather than unfilled. Blue's and mid-grey's tracks are
             // the faintest the palette has ever had, so they are the bar a new
             // colour has to clear.
-            for (accent in Accent.entries) {
-                val contrast = contrastAgainstWhite(over(DialColours.DISC, trackColour(accent)))
+            for (offered in NamedAccent.entries) {
+                val contrast = contrastAgainstWhite(over(DialColours.DISC, trackColour(offered.accent)))
 
                 assertTrue(
                     contrast >= FAINTEST_TRACK,
-                    "$accent's track is only $contrast against the disc",
+                    "$offered's track is only $contrast against the disc",
                 )
             }
         }
@@ -343,6 +349,18 @@ class DialLayoutTest {
 
         /** Material's Yellow 500, which is what "yellow" means until it is looked at. */
         const val BRIGHT_YELLOW = 0xFFFFEB3B.toInt()
+
+        /** Colours the palette does not offer, which an Accent can be all the same. */
+        val UNNAMED_COLOURS: List<Accent> = listOf(
+            0xFF000000,
+            0xFFFFFFFF,
+            0xFFFF0000,
+            0xFF00FF00,
+            0xFF0000FF,
+            0xFF010203,
+            0xFF4A2C17,
+            0xFFC0FFEE,
+        ).map { Accent.of(it.toInt()) }
 
         /** The faintest the palette's tracks have ever been, on the same scale. */
         const val FAINTEST_TRACK = 1.18

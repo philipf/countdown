@@ -350,11 +350,11 @@ private fun EventEditor(
                         Column(verticalArrangement = Arrangement.spacedBy(ACCENT_GAP_DP.dp)) {
                             for (line in lines) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(ACCENT_GAP_DP.dp)) {
-                                    for (accent in line) {
+                                    for (offered in line) {
                                         AccentCircle(
-                                            accent = accent,
-                                            selected = accent == stored.accent,
-                                            onClick = { edit { it.withAccent(accent) } },
+                                            offered = offered,
+                                            selected = offered.accent == stored.accent,
+                                            onClick = { edit { it.withAccent(offered.accent) } },
                                         )
                                     }
                                 }
@@ -405,13 +405,13 @@ private fun Field(label: String, content: @Composable () -> Unit) {
 
 /** One colour to pick, named out loud because a circle of colour is only a colour. */
 @Composable
-private fun AccentCircle(accent: Accent, selected: Boolean, onClick: () -> Unit) {
+private fun AccentCircle(offered: NamedAccent, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(ACCENT_CIRCLE_DP.dp)
             .clip(CircleShape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = accent.label }
+            .semantics { contentDescription = offered.label }
             .border(
                 width = if (selected) 3.dp else 1.dp,
                 color = if (selected) {
@@ -423,7 +423,7 @@ private fun AccentCircle(accent: Accent, selected: Boolean, onClick: () -> Unit)
             )
             .padding(8.dp)
             .clip(CircleShape)
-            .background(Color(accent.argb)),
+            .background(Color(offered.accent.argb)),
     )
 }
 

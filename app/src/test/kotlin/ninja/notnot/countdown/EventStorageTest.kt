@@ -38,8 +38,8 @@ class EventStorageTest {
 
         @Test
         fun `the Accent starts blue`() {
-            assertEquals(Accent.BLUE, StoredEvent.NOTHING_SET.accent)
-            assertEquals(Accent.BLUE, storedEventFrom(emptyMap()).accent)
+            assertEquals(NamedAccent.BLUE.accent, StoredEvent.NOTHING_SET.accent)
+            assertEquals(NamedAccent.BLUE.accent, storedEventFrom(emptyMap()).accent)
         }
     }
 
@@ -86,10 +86,10 @@ class EventStorageTest {
         fun `recolouring leaves the anchor alone`() {
             val before = anchoredEvent()
 
-            val after = before.withAccent(Accent.RED)
+            val after = before.withAccent(NamedAccent.RED.accent)
 
             assertEquals(before.anchorDate, after.anchorDate)
-            assertEquals(Accent.RED, after.accent)
+            assertEquals(NamedAccent.RED.accent, after.accent)
         }
 
         @Test
@@ -111,7 +111,7 @@ class EventStorageTest {
 
         @Test
         fun `there is no Event until an Event Date is chosen`() {
-            val stored = StoredEvent.NOTHING_SET.withTitle("Holiday").withAccent(Accent.RED)
+            val stored = StoredEvent.NOTHING_SET.withTitle("Holiday").withAccent(NamedAccent.RED.accent)
 
             assertNull(stored.toEvent())
         }
@@ -126,7 +126,7 @@ class EventStorageTest {
                     eventDate = date("2027-12-25"),
                     anchorDate = date("2026-08-15"),
                     title = null,
-                    accent = Accent.BLUE,
+                    accent = NamedAccent.BLUE.accent,
                 ),
                 stored.toEvent(),
             )
@@ -157,7 +157,7 @@ class EventStorageTest {
                 eventDate = date("2027-12-25"),
                 anchorDate = date("2026-08-15"),
                 title = "Christmas",
-                accent = Accent.RED,
+                accent = NamedAccent.RED.accent,
             )
 
             assertEquals(stored, storedEventFrom(stored.toValues()))
@@ -194,24 +194,49 @@ class EventStorageTest {
         }
 
         @Test
-        fun `every Accent is written under its own name and reads back as itself`() {
-            for (accent in Accent.entries) {
-                val values = anchoredEvent().withAccent(accent).toValues()
+        fun `every Accent offered is written under its own name and reads back as itself`() {
+            for (offered in NamedAccent.entries) {
+                val values = anchoredEvent().withAccent(offered.accent).toValues()
 
-                assertEquals(accent.name, values[EventKeys.ACCENT])
-                assertEquals(accent, storedEventFrom(values).accent, "$accent came back as something else")
+                assertEquals(offered.name, values[EventKeys.ACCENT])
+                assertEquals(
+                    offered.accent,
+                    storedEventFrom(values).accent,
+                    "$offered came back as something else",
+                )
             }
         }
 
         @Test
-        fun `the names in use before the palette grew still read as the colours they did`() {
+        fun `a colour the palette does not offer is written and reads back as itself`() {
+            val mixed = Accent.of(0xFF4A2C17.toInt())
+
+            val values = anchoredEvent().withAccent(mixed).toValues()
+
+            assertEquals("#4A2C17", values[EventKeys.ACCENT])
+            assertEquals(mixed, storedEventFrom(values).accent)
+        }
+
+        @Test
+        fun `every name written by an older build still reads as the colour it meant`() {
             // An Event stored by an older build names its Accent, not its place
             // in the list, so adding colours to the end of the list cannot
-            // recolour an Event already on someone's phone.
-            for (name in listOf("BLUE", "BLACK", "MID_GREY", "RED")) {
+            // recolour an Event already on someone's phone. The four v1 offered
+            // are here with the three #17 added, since both are on phones.
+            val onDisk = mapOf(
+                "BLUE" to NamedAccent.BLUE,
+                "BLACK" to NamedAccent.BLACK,
+                "MID_GREY" to NamedAccent.MID_GREY,
+                "RED" to NamedAccent.RED,
+                "GREEN" to NamedAccent.GREEN,
+                "PINK" to NamedAccent.PINK,
+                "YELLOW" to NamedAccent.YELLOW,
+            )
+
+            for ((name, offered) in onDisk) {
                 val stored = storedEventFrom(mapOf(EventKeys.ACCENT to name))
 
-                assertEquals(name, stored.accent.name)
+                assertEquals(offered.accent, stored.accent, name)
             }
         }
 
@@ -246,10 +271,15 @@ class EventStorageTest {
         }
 
         @Test
-        fun `an unknown Accent reads as the default`() {
-            val stored = storedEventFrom(mapOf(EventKeys.ACCENT to "PUCE"))
+        fun `an unreadable Accent reads as the default`() {
+            // A name nothing offers and a colour that is not a colour. What
+            // counts as either is `AccentTest`'s business; that an Event with
+            // one still opens is this one's.
+            for (value in listOf("PUCE", "#no", "")) {
+                val stored = storedEventFrom(mapOf(EventKeys.ACCENT to value))
 
-            assertEquals(Accent.DEFAULT, stored.accent)
+                assertEquals(Accent.DEFAULT, stored.accent, "'$value'")
+            }
         }
 
         @Test
@@ -293,10 +323,10 @@ class EventStorageTest {
 
         @Test
         fun `writing an Event again does not list it twice`() {
-            val written = twoEvents().withEvent(CHRISTMAS_ID, christmas().withAccent(Accent.BLACK))
+            val written = twoEvents().withEvent(CHRISTMAS_ID, christmas().withAccent(NamedAccent.BLACK.accent))
 
             assertEquals(listOf(CHRISTMAS_ID, HOLIDAY_ID), eventIdsFrom(written))
-            assertEquals(Accent.BLACK, read(written)[CHRISTMAS_ID]?.accent)
+            assertEquals(NamedAccent.BLACK.accent, read(written)[CHRISTMAS_ID]?.accent)
         }
 
         @Test
@@ -518,21 +548,21 @@ class EventStorageTest {
             eventDate = date("2027-12-25"),
             anchorDate = date("2026-08-15"),
             title = title,
-            accent = Accent.BLUE,
+            accent = NamedAccent.BLUE.accent,
         )
 
         fun christmas() = StoredEvent(
             eventDate = date("2027-12-25"),
             anchorDate = date("2026-08-15"),
             title = "Christmas",
-            accent = Accent.RED,
+            accent = NamedAccent.RED.accent,
         )
 
         fun holiday() = StoredEvent(
             eventDate = date("2026-09-01"),
             anchorDate = date("2026-08-01"),
             title = "Holiday",
-            accent = Accent.BLACK,
+            accent = NamedAccent.BLACK.accent,
         )
 
         /** A file holding two Events, as it would be after writing them one at a time. */

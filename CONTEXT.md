@@ -41,8 +41,13 @@ has passed. Empty on the Anchor Date, full on the Event Date.
 _Avoid_: Ring, gauge, progress bar
 
 **Accent**:
-The colour the user picks for the Progress Arc. One of seven fixed colours.
+The colour the user picks for the Progress Arc. Any colour, and always opaque.
 _Avoid_: Theme, colour scheme, swatch
+
+**Named Accent**:
+One of the seven Accents the editor offers, each with a name it is stored under
+and a name a screen reader says.
+_Avoid_: Swatch, preset, palette entry
 
 **Day Rollover**:
 Local midnight, when Days Remaining changes and the Dial needs redrawing.

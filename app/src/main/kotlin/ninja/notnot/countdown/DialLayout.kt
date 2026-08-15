@@ -142,6 +142,9 @@ object DialColours {
 /**
  * The unfilled part of the Progress Arc: the Accent, faded far enough to read as
  * the space the arc has yet to fill.
+ *
+ * The hue is the Accent's own and only the alpha is the app's, so a colour that
+ * was never in the palette gets a track the same way a named one does.
  */
 fun trackColour(accent: Accent): Int = (accent.argb and 0x00FFFFFF) or (TRACK_ALPHA shl 24)
 

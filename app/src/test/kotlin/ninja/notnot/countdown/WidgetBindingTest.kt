@@ -254,7 +254,7 @@ class WidgetBindingTest {
             assertEquals(listOf(7), dials.single().appWidgetIds)
             assertEquals("Christmas", dials.single().state.title)
             assertEquals("131", dials.single().state.primaryText)
-            assertEquals(Accent.RED, dials.single().state.accent)
+            assertEquals(NamedAccent.RED.accent, dials.single().state.accent)
         }
 
         @Test
@@ -272,7 +272,7 @@ class WidgetBindingTest {
             val states = dials.map { it.state }
             assertEquals(listOf("131", "16"), states.map { it.primaryText })
             assertEquals(listOf("Christmas", "Holiday"), states.map { it.title })
-            assertEquals(listOf(Accent.RED, Accent.BLUE), states.map { it.accent })
+            assertEquals(listOf(NamedAccent.RED.accent, NamedAccent.BLUE.accent), states.map { it.accent })
         }
 
         @Test
@@ -400,13 +400,13 @@ class WidgetBindingTest {
                 eventDate = LocalDate.parse("2026-12-25"),
                 anchorDate = LocalDate.parse("2026-08-01"),
                 title = "Christmas",
-                accent = Accent.RED,
+                accent = NamedAccent.RED.accent,
             ),
             EventId("holiday") to StoredEvent(
                 eventDate = LocalDate.parse("2026-09-01"),
                 anchorDate = LocalDate.parse("2026-08-01"),
                 title = "Holiday",
-                accent = Accent.BLUE,
+                accent = NamedAccent.BLUE.accent,
             ),
             EventId("new") to StoredEvent.NOTHING_SET,
         )

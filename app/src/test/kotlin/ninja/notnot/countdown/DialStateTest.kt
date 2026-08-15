@@ -48,13 +48,13 @@ class DialStateTest {
                     eventDate = date("2026-08-22"),
                     anchorDate = date("2026-08-15"),
                     title = "Holiday",
-                    accent = Accent.RED,
+                    accent = NamedAccent.RED.accent,
                 ),
                 today = date("2026-08-15"),
             )
 
             assertEquals("Holiday", state.title)
-            assertEquals(Accent.RED, state.accent)
+            assertEquals(NamedAccent.RED.accent, state.accent)
         }
     }
 
@@ -146,7 +146,7 @@ class DialStateTest {
             val state = dialState(event = null, today = date("2026-08-15"))
 
             assertEquals(Accent.DEFAULT, state.accent)
-            assertEquals(Accent.BLUE, state.accent)
+            assertEquals(NamedAccent.BLUE.accent, state.accent)
         }
     }
 

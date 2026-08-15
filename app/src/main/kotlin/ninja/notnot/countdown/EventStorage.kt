@@ -113,8 +113,7 @@ fun storedEventFrom(values: Map<String, String?>): StoredEvent {
         // An Anchor Date with no Event Date measures nothing, so it is ignored.
         anchorDate = eventDate?.let { parseDate(values[EventKeys.ANCHOR_DATE]) },
         title = values[EventKeys.TITLE].orEmpty(),
-        accent = Accent.entries.firstOrNull { it.name == values[EventKeys.ACCENT] }
-            ?: Accent.DEFAULT,
+        accent = accentFrom(values[EventKeys.ACCENT]),
     )
 }
 
@@ -124,7 +123,7 @@ fun StoredEvent.toValues(): Map<String, String?> = mapOf(
     EventKeys.ANCHOR_DATE to eventDate?.let { anchorDate?.toString() },
     // A blank title is no title, so nothing is kept for it.
     EventKeys.TITLE to title.takeIf { it.isNotBlank() },
-    EventKeys.ACCENT to accent.name,
+    EventKeys.ACCENT to accent.toStoredValue(),
 )
 
 /**

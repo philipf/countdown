@@ -225,14 +225,20 @@ the Canvas and Compose all sit outside these functions and are not tested.
 
 ### Accent palette
 
-Seven fixed colours: blue `#0288D1` (default), black `#000000`, mid-grey
-`#757575`, red `#D32F2F`, green `#2E7D32`, pink `#E91E63`, yellow `#8A7500`.
-White is not offered — it would be invisible on the white disc.
+An Accent is a colour, and an Event can hold any of them. Seven are offered:
+blue `#0288D1` (default), black `#000000`, mid-grey `#757575`, red `#D32F2F`,
+green `#2E7D32`, pink `#E91E63`, yellow `#8A7500`. White is not offered — it
+would be invisible on the white disc.
 
-Every one of them has to hold up on that disc twice over: as the filled arc, and
-as the faded track behind it. That is what makes the yellow a dark gold rather
-than a bright yellow, which is the same colour as the disc as far as an eye at
-arm's length is concerned.
+Every colour that is offered has to hold up on that disc twice over: as the
+filled arc, and as the faded track behind it. That is what makes the yellow a
+dark gold rather than a bright yellow, which is the same colour as the disc as
+far as an eye at arm's length is concerned. That rule is on what the app offers
+rather than on what an Accent can be.
+
+An offered colour is stored under its name and any other colour as a hex, so a
+shade corrected here follows the Events already holding it. See ADR-0010. An
+Accent is always opaque: the arc is drawn on the disc and not through it.
 
 Seven do not fit across a narrow phone in one line, so the editor lays them out
 in as many lines as the width it is given needs.
@@ -302,10 +308,12 @@ behaviour.
   - A binding naming a deleted Event resolves to nothing.
   - Removing a binding leaves the other widgets' bindings alone.
 - Cases to cover for the palette:
-  - Every Accent reads on the white disc, as the filled arc and as the faded
-    track, yellow included.
-  - Every Accent is stored under its own name and reads back as itself, and a
-    name written by an older build still means the colour it meant.
+  - Every colour offered reads on the white disc, as the filled arc and as the
+    faded track, yellow included.
+  - Every colour offered is stored under its own name and reads back as itself,
+    and a name written by any older build still means the colour it meant.
+  - A colour nobody named is stored as a hex and reads back as the same colour,
+    and nothing that is neither a name nor a hex is read as either.
   - The lines they are offered in: one line when there is room, more than one on
     the narrowest phone, and every colour offered exactly once at any width.
 - The renderer, the alarm chain, the widget provider, the chooser activity and
