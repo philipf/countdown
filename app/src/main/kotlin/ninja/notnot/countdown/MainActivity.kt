@@ -163,10 +163,11 @@ private fun EventListScreen(
     var asking by remember { mutableStateOf<EventId?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Countdown") }) },
+        topBar = { TopAppBar(title = { Text("Countdown") }, windowInsets = topBarInsets) },
         floatingActionButton = {
             ExtendedFloatingActionButton(onClick = onAdd) { Text("Add an Event") }
         },
+        contentWindowInsets = screenInsets,
     ) { insets ->
         if (events.isEmpty()) {
             // A first run has nothing to show, so it says what to do instead of
@@ -291,8 +292,10 @@ private fun EventEditor(
             TopAppBar(
                 title = { Text(rowTitle(stored)) },
                 navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+                windowInsets = topBarInsets,
             )
         },
+        contentWindowInsets = screenInsets,
     ) { insets ->
         Column(
             modifier = Modifier

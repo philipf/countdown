@@ -107,7 +107,8 @@ private fun ChooseEventScreen(
     onChoose: (EventId) -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Which Event?") }) },
+        topBar = { TopAppBar(title = { Text("Which Event?") }, windowInsets = topBarInsets) },
+        contentWindowInsets = screenInsets,
     ) { insets ->
         if (events.isEmpty()) {
             // Placing a widget before there is anything to count to is a dead
