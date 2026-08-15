@@ -1,0 +1,71 @@
+# Runs the tests, lint and a debug build on every push and pull request, so a
+# tag is only ever cut from a commit that has already been through them.
+#
+# Nothing here is signed: a debug build uses the throwaway debug key AGP
+# generates, so this workflow needs no secrets.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    # A docs-only change cannot break the build, and this repo is private, so
+    # the minutes are worth keeping. Remove this if CI ever becomes a required
+    # status check — a skipped workflow never reports one, which blocks merges.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+
+# A push that supersedes an earlier one cancels it rather than paying for both.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The same cache keys as release.yml, so whichever workflow runs first
+      # warms the other. Caches written on main are readable from branches and
+      # tags, which is the direction that matters.
+      - name: Cache the Android SDK
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/countdown/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('.mise.toml') }}
+
+      - name: Cache Gradle's downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', '**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - uses: jdx/mise-action@v4
+
+      # One invocation, so Gradle runs them in parallel and configures once.
+      #
+      # lintDebug is the debug-variant equivalent of the lintVitalRelease a
+      # release build runs. It is not the same check — lintVital runs only the
+      # fatal-severity ones, and against the release variant — so this is early
+      # warning rather than a guarantee. The release workflow runs the real one
+      # before it tags anything, so a miss here costs a failed run, not a tag.
+      - name: Test, lint and build
+        run: mise exec -- gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+
+      # Only on failure: the reports are what explain a red run, and uploading
+      # them on a green one would just cost storage.
+      - name: Upload the test and lint reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports
+          path: app/build/reports/
+          retention-days: 7

@@ -1,0 +1,129 @@
+# Builds the signed release APK and, only once it exists, tags the commit and
+# publishes it as a GitHub release.
+#
+# The tag is the last thing that happens, not the first. A run that fails a test,
+# trips lint or cannot sign leaves the repo exactly as it was, so a release is
+# retried by running this again rather than by unpicking a tag that points at
+# nothing.
+#
+# Toolchain, SDK and Gradle version all come from .mise.toml, the same file local
+# builds use, so there is one place to change a version.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, as MAJOR.MINOR.PATCH — e.g. 0.2.0"
+        required: true
+        type: string
+
+# Creating the tag and the release needs write access to the repo's contents.
+# Nothing else does, so nothing else is granted.
+permissions:
+  contents: write
+
+# One release at a time, whatever version it is.
+concurrency:
+  group: release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Checked before the toolchain is installed, so a typo or an already-used
+      # version fails in seconds.
+      #
+      # The input arrives through the environment rather than through ${{ }} in
+      # the script: ${{ }} is substituted into the source before bash reads it,
+      # so a version containing shell syntax would run as code.
+      - name: Check the version
+        id: version
+        env:
+          RAW_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${RAW_VERSION#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "'$RAW_VERSION' is not MAJOR.MINOR.PATCH, so there is no version in it." >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" >/dev/null 2>&1; then
+            echo "v$version is already tagged. Releases are not rebuilt; pick the next version." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version from ${GITHUB_SHA:0:7} on $GITHUB_REF_NAME."
+
+      # Restored before mise runs, so its install-sdk hook finds the packages
+      # already there and downloads nothing. The runner has its own Android SDK,
+      # but .mise.toml points ANDROID_HOME at this one, which is the copy pinned
+      # to the versions the build was tested against.
+      - name: Cache the Android SDK
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/share/countdown/android-sdk
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('.mise.toml') }}
+
+      - name: Cache Gradle's downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', '**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # Installs the JDK, Gradle and Android command line tools from .mise.toml,
+      # then runs its postinstall hook to fill ANDROID_HOME.
+      - uses: jdx/mise-action@v4
+
+      # The build looks for the keystore at this path and takes its password from
+      # $COUNTDOWN_KEYSTORE_PASSWORD, so nothing about the build changes for CI.
+      # Done before the tests: a missing secret should fail in seconds.
+      - name: Put the release keystore where the build expects it
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "The secret RELEASE_KEYSTORE_BASE64 is empty or unset. See the Releasing section of README.md." >&2
+            exit 1
+          fi
+          mkdir -p ~/.android-keystores
+          chmod 700 ~/.android-keystores
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > ~/.android-keystores/countdown-release.jks
+          chmod 600 ~/.android-keystores/countdown-release.jks
+
+      - name: Run the unit tests
+        run: mise exec -- gradle --no-daemon :app:testDebugUnitTest
+
+      # assembleRelease runs lintVitalRelease on the way through, so a fatal lint
+      # issue stops the release here — before anything has been tagged.
+      - name: Build the signed release APK
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COUNTDOWN_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          mise exec -- gradle --no-daemon :app:assembleRelease "-PversionName=$VERSION"
+
+      # Named after the version, so a downloaded APK still says which one it is.
+      - name: Name the APK after the release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk "countdown-$VERSION.apk"
+
+      # The first and only write to the repo. gh creates the tag itself when it
+      # does not exist yet, pointing it at the commit this APK was built from —
+      # so the tag cannot outlive the artifact that justifies it.
+      - name: Tag the commit and publish the release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "Countdown $VERSION" \
+            --generate-notes \
+            "countdown-$VERSION.apk"

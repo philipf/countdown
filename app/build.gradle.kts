@@ -187,6 +187,36 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyReleaseSigning)
 }
 
+// The git tag is what a version is: the release workflow turns a v0.2.0 tag into
+// -PversionName=0.2.0. A local build has no tag behind it, so it gets the dev
+// version below.
+val taggedVersionName: String? = providers.gradleProperty("versionName").orNull
+
+/**
+ * The whole number Android compares when deciding whether one APK replaces
+ * another, so it has to rise with every release. Two digits each for minor and
+ * patch: 0.2.0 is 200 and 1.0.0 is 10000, which stays in order as long as
+ * neither of them reaches 100.
+ */
+fun versionCodeOf(versionName: String): Int {
+    val match = Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(versionName)
+        ?: throw GradleException(
+            "versionName '$versionName' is not MAJOR.MINOR.PATCH. Tag releases as v1.2.3.",
+        )
+    val (major, minor, patch) = match.destructured.toList().map(String::toInt)
+    if (minor > 99 || patch > 99) {
+        throw GradleException(
+            "versionName '$versionName' has a minor or patch part over 99, which would " +
+                "give it the same versionCode as a later version.",
+        )
+    }
+    val code = major * 10_000 + minor * 100 + patch
+    if (code < 1) {
+        throw GradleException("versionName '$versionName' leaves no room below it. Start at 0.0.1.")
+    }
+    return code
+}
+
 android {
     namespace = "ninja.notnot.countdown"
     // Android 17. Read from the installed platform, not guessed:
@@ -198,8 +228,10 @@ android {
         applicationId = "ninja.notnot.countdown"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        // A local build's versionCode of 1 is below every release's, so a release
+        // APK installs over a local one and not the other way round.
+        versionCode = taggedVersionName?.let(::versionCodeOf) ?: 1
+        versionName = taggedVersionName ?: "0.0.0-dev"
     }
 
     signingConfigs {

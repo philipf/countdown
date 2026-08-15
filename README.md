@@ -84,3 +84,67 @@ mise run build      # signed release APK in app/build/outputs/apk/release/
 mise run install    # install over adb and launch it
 mise run test       # JVM unit tests
 ```
+
+## CI
+
+`.github/workflows/ci.yml` runs the tests, lint and a debug build on every push
+to `main` and every pull request. It needs no secrets: a debug build is signed
+with the throwaway key AGP generates. A docs-only change skips it.
+
+Lint runs here as early warning. It is `lintDebug`, not the `lintVitalRelease` a
+release build runs, so it is not the same check — the release workflow runs the
+real one itself.
+
+## Releasing
+
+A release is a run of `.github/workflows/release.yml`, given the version to cut:
+
+```sh
+gh workflow run release.yml -f version=0.2.0
+```
+
+It runs the tests, builds and signs the APK, and only then tags the commit and
+publishes the release with generated notes. The tag is the last thing that
+happens, not the trigger, so a run that fails a test, trips lint or cannot sign
+leaves the repo untouched — fix it and run again. Nothing needs unpicking, and
+there is never a tag pointing at a version that was never built.
+
+The version is still the tag and the tag is still the version; the workflow
+creates it rather than you. `versionName` is the version you gave it, and
+`versionCode` is computed as
+`major * 10000 + minor * 100 + patch`, so `0.2.0` is `200`. That keeps the
+number rising as long as neither the minor nor the patch part reaches 100; the
+build refuses a version that would break the ordering.
+
+The tag is made on the runner, so `git fetch --tags` after a release to see it
+locally.
+
+A local build is given no version, so it is `0.0.0-dev` with `versionCode` 1.
+That is below every release, so a release APK installs over a local build but
+not the reverse — `adb uninstall ninja.notnot.countdown` first when going back.
+
+### Secrets
+
+The workflow needs two repository secrets. The keystore is the same one
+`mise run keystore` made, base64 encoded so it survives as text:
+
+```sh
+base64 -w0 ~/.android-keystores/countdown-release.jks |
+  gh secret set RELEASE_KEYSTORE_BASE64
+
+# printf, not head alone: a trailing newline would be stored as part of the
+# password. The password stays in a pipe, never on a command line.
+printf '%s' "$(pass show countdown/release-keystore/password | head -1)" |
+  gh secret set RELEASE_KEYSTORE_PASSWORD
+```
+
+The workflow writes the keystore back to
+`~/.android-keystores/countdown-release.jks` on the runner and passes the
+password as `$COUNTDOWN_KEYSTORE_PASSWORD`, which is the second of the three
+sources the build already looks in. Nothing about the build is CI-specific.
+
+### The runner
+
+`jdx/mise-action` reads the same `.mise.toml`, so CI and a laptop build with
+one set of versions. The Android SDK it installs is cached against that file's
+hash, so only a toolchain change pays for the download again.
