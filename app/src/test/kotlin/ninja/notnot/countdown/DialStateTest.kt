@@ -1,6 +1,5 @@
 package ninja.notnot.countdown
 
-import java.io.File
 import java.time.LocalDate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -9,7 +8,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.fail
 
 /**
  * Every case in the PRD's testing section. Each states an input and an expected
@@ -308,6 +306,24 @@ class DialStateTest {
     }
 
     @Nested
+    @DisplayName("What the Dial says out loud")
+    inner class SpokenAs {
+
+        @Test
+        fun `reads the number, the label and the title`() {
+            val state = dialState(eventOn("2026-08-22", title = "Holiday"), date("2026-08-15"))
+
+            assertEquals("7 Days Holiday", spokenAs(state))
+        }
+
+        @Test
+        fun `leaves out what is not there`() {
+            assertEquals("Today", spokenAs(dialState(eventOn("2026-08-15"), date("2026-08-15"))))
+            assertEquals("Set a date", spokenAs(dialState(event = null, today = date("2026-08-15"))))
+        }
+    }
+
+    @Nested
     @DisplayName("Purity")
     inner class Purity {
 
@@ -338,7 +354,7 @@ class DialStateTest {
             )
 
             for (name in DOMAIN_SOURCES) {
-                val source = domainSource(name)
+                val source = appSource(name)
                 for ((what, pattern) in banned) {
                     val hit = pattern.find(source)
                     assertNull(hit?.value, "$name contains $what: ${hit?.value}")
@@ -369,22 +385,5 @@ class DialStateTest {
             event = Event(eventDate = date(event), anchorDate = date(anchor)),
             today = date(today),
         ).arcFraction
-
-        /**
-         * The domain source as text, so the purity rule can be checked rather
-         * than assumed. Walks up from the working directory, which Gradle sets
-         * to the module rather than the repo root.
-         */
-        fun domainSource(name: String): String {
-            val relative = "src/main/kotlin/ninja/notnot/countdown/$name"
-            var directory: File? = File("").absoluteFile
-            while (directory != null) {
-                for (candidate in listOf(File(directory, relative), File(directory, "app/$relative"))) {
-                    if (candidate.isFile) return candidate.readText()
-                }
-                directory = directory.parentFile
-            }
-            fail("cannot find $relative from ${File("").absolutePath}")
-        }
     }
 }

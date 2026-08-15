@@ -233,7 +233,3 @@ private val Accent.label: String
         Accent.MID_GREY -> "Mid grey"
         Accent.RED -> "Red"
     }
-
-/** The Dial is a bitmap, so it has to say out loud what it shows. */
-private fun spokenAs(state: DialState): String =
-    listOfNotNull(state.primaryText, state.labelText, state.title).joinToString(" ")

@@ -61,6 +61,14 @@ fun dialState(event: Event?, today: LocalDate): DialState {
 }
 
 /**
+ * What the Dial says out loud. The Dial is a bitmap, so nothing in it reaches a
+ * screen reader unless it is spelled out — once here, for the widget and the
+ * config screen preview alike.
+ */
+fun spokenAs(state: DialState): String =
+    listOfNotNull(state.primaryText, state.labelText, state.title).joinToString(" ")
+
+/**
  * Elapsed days over the Anchor Date to Event Date span, clamped to 0f..1f. A
  * span of zero or less — the Event was set for today or for a past date — is
  * full, which also keeps the division away from zero.

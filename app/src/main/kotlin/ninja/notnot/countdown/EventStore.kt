@@ -14,11 +14,11 @@ import android.content.SharedPreferences
  * on disk by the time the owner leaves, and they may leave by force-stopping the
  * app. Four short strings is a cheap thing to commit.
  */
-class EventStore(private val preferences: SharedPreferences) {
+class EventStore(context: Context) {
 
-    constructor(context: Context) : this(
-        context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE),
-    )
+    private val appContext: Context = context.applicationContext
+    private val preferences: SharedPreferences =
+        appContext.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
     fun read(): StoredEvent =
         storedEventFrom(EventKeys.ALL.associateWith { preferences.getString(it, null) })
@@ -29,6 +29,10 @@ class EventStore(private val preferences: SharedPreferences) {
             if (value == null) editor.remove(key) else editor.putString(key, value)
         }
         editor.commit()
+        // Redrawn here rather than at the call site: every write goes through
+        // this one method, so a future writer cannot leave the home screen
+        // showing an Event the owner has already changed.
+        redrawWidgets(appContext)
     }
 
     private companion object {

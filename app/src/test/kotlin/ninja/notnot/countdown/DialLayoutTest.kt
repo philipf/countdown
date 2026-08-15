@@ -1,6 +1,5 @@
 package ninja.notnot.countdown
 
-import java.io.File
 import kotlin.math.pow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -10,7 +9,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.fail
 
 /**
  * The Dial's layout maths and palette. Everything the renderer decides is here,
@@ -274,7 +272,7 @@ class DialLayoutTest {
 
         @Test
         fun `the layout source imports nothing from Android, so it can be tested on the JVM`() {
-            val source = sourceOf("DialLayout.kt")
+            val source = appSource("DialLayout.kt")
 
             assertNull(Regex("""import\s+android[x.]""").find(source)?.value)
         }
@@ -305,19 +303,6 @@ class DialLayoutTest {
             }
             val luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
             return 1.05 / (luminance + 0.05)
-        }
-
-        /** The source as text. Gradle runs tests from the module, not the repo root. */
-        fun sourceOf(name: String): String {
-            val relative = "src/main/kotlin/ninja/notnot/countdown/$name"
-            var directory: File? = File("").absoluteFile
-            while (directory != null) {
-                for (candidate in listOf(File(directory, relative), File(directory, "app/$relative"))) {
-                    if (candidate.isFile) return candidate.readText()
-                }
-                directory = directory.parentFile
-            }
-            fail("cannot find $relative from ${File("").absolutePath}")
         }
     }
 }

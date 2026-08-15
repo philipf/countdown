@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the launcher is told about the widget.
+
+  There is no android:configure, because one Event app-wide leaves a copy of the
+  widget nothing to configure: dropping it shows the Event straight away.
+
+  updatePeriodMillis is 0 — nothing here runs on a timer. The app redraws the
+  widget when the Event changes, and midnight is a separate job.
+
+  Fixed size for now: resizeMode is none, and the size matches WIDGET_SIZE_DP in
+  WidgetSizing.kt, which is what the bitmap is sized from.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_dial"
+    android:minHeight="110dp"
+    android:minWidth="110dp"
+    android:resizeMode="none"
+    android:targetCellHeight="2"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

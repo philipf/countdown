@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Countdown</string>
+    <!-- What the launcher shows under the widget in its picker. -->
+    <string name="widget_description">Days left until your date.</string>
 </resources>
