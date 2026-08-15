@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,7 +54,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -61,8 +64,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 /**
  * Stands in for the wallpaper behind the preview. The Dial's background is
@@ -73,6 +78,24 @@ private val WALLPAPER_STAND_IN = Color(0xFF37474F)
 
 /** How big the preview Dial is drawn. The Dial looks the same at any size. */
 private val PREVIEW_SIZE = 240.dp
+
+/** The same Dial inside the mixer, where a dialog has less room to give it. */
+private val MIXER_PREVIEW_SIZE = 140.dp
+
+/**
+ * The mixer's circle when the Event is on a named colour: every hue, once round,
+ * which says that anything can be made here better than a word would. Red is at
+ * both ends so the sweep meets itself.
+ */
+private val SPECTRUM = listOf(
+    Color.Red,
+    Color.Yellow,
+    Color.Green,
+    Color.Cyan,
+    Color.Blue,
+    Color.Magenta,
+    Color.Red,
+)
 
 /**
  * The app's two screens: the list of Events, and the editor behind whichever row
@@ -287,6 +310,12 @@ private fun EventEditor(
 ) {
     var stored by remember { mutableStateOf(initial) }
     var pickingDate by remember { mutableStateOf(false) }
+    // The colour being mixed, while one is. It is held apart from the Event and
+    // nothing is written until the owner says so, which is what makes backing
+    // out of the mixer leave the Accent exactly as it was. Everything else on
+    // this screen is saved as it is typed; a colour half way between two colours
+    // is the one thing that is not worth saving.
+    var mixing by remember { mutableStateOf<Accent?>(null) }
 
     fun edit(change: (StoredEvent) -> StoredEvent) {
         stored = change(stored).also(onChange)
@@ -341,20 +370,32 @@ private fun EventEditor(
                 )
 
                 Field("Accent") {
-                    // The colours do not all fit across a narrow phone, so the
+                    // The circles do not all fit across a narrow phone, so the
                     // width they have is measured here and how it is filled is
-                    // decided by accentsInLines. A single line would run the
-                    // last colours off the edge, where they cannot be tapped.
+                    // decided by accentChoicesInLines. A single line would run
+                    // the last of them off the edge, where they cannot be
+                    // tapped.
                     BoxWithConstraints {
-                        val lines = accentsInLines(maxWidth.value.toInt())
+                        val lines = accentChoicesInLines(maxWidth.value.toInt())
                         Column(verticalArrangement = Arrangement.spacedBy(ACCENT_GAP_DP.dp)) {
                             for (line in lines) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(ACCENT_GAP_DP.dp)) {
-                                    for (offered in line) {
+                                    for (choice in line) {
                                         AccentCircle(
-                                            offered = offered,
-                                            selected = offered.accent == stored.accent,
-                                            onClick = { edit { it.withAccent(offered.accent) } },
+                                            choice = choice,
+                                            inUse = stored.accent,
+                                            onClick = {
+                                                when (choice) {
+                                                    is AccentChoice.Named ->
+                                                        edit { it.withAccent(choice.named.accent) }
+                                                    // The mixer opens on the
+                                                    // colour the Event already
+                                                    // has, so a colour that is
+                                                    // nearly right is nudged
+                                                    // rather than started again.
+                                                    AccentChoice.Mixed -> mixing = stored.accent
+                                                }
+                                            },
                                         )
                                     }
                                 }
@@ -374,23 +415,108 @@ private fun EventEditor(
             onDismiss = { pickingDate = false },
         )
     }
+
+    mixing?.let { mixed ->
+        AccentMixer(
+            mixed = mixed,
+            dial = dialState(stored.toEvent(), today),
+            onMix = { mixing = it },
+            onSettle = {
+                edit { event -> event.withAccent(mixed) }
+                mixing = null
+            },
+            onDismiss = { mixing = null },
+        )
+    }
 }
 
 /** The Dial as the widget will draw it, redrawn whenever the Event changes. */
 @Composable
-private fun DialPreview(state: DialState) {
+private fun DialPreview(state: DialState, size: Dp = PREVIEW_SIZE) {
     Box(
         modifier = Modifier.fillMaxWidth().background(WALLPAPER_STAND_IN).padding(24.dp),
         contentAlignment = Alignment.Center,
     ) {
         // Drawn at the pixel size it is shown at, so it is sharp rather than
         // scaled.
-        val sizePx = with(LocalDensity.current) { PREVIEW_SIZE.roundToPx() }
+        val sizePx = with(LocalDensity.current) { size.roundToPx() }
         val bitmap = remember(state, sizePx) { renderDial(state, sizePx).asImageBitmap() }
         Image(
             bitmap = bitmap,
             contentDescription = spokenAs(state),
-            modifier = Modifier.size(PREVIEW_SIZE),
+            modifier = Modifier.size(size),
+        )
+    }
+}
+
+/**
+ * Where a colour is mixed: three channels, and the Dial they make above them.
+ *
+ * The Dial is here rather than only behind the dialog because the point of
+ * mixing a colour is watching it arrive on the white disc, and what is behind a
+ * dialog is dimmed and half covered. It is the Event's own Dial with the colour
+ * swapped, so what is being looked at is the widget.
+ *
+ * Every colour is allowed and none of them is argued with, white included. See
+ * ADR-0011.
+ *
+ * @param mixed the colour as it stands.
+ * @param dial the Event's Dial, whose Accent this replaces.
+ * @param onMix a channel was moved.
+ * @param onSettle the colour is the one, so the Event takes it.
+ * @param onDismiss the mixing is over and the Event keeps the Accent it had.
+ */
+@Composable
+private fun AccentMixer(
+    mixed: Accent,
+    dial: DialState,
+    onMix: (Accent) -> Unit,
+    onSettle: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mix a colour") },
+        text = {
+            // Scrolled, because three sliders and a Dial are taller than a
+            // dialog on a phone held sideways.
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DialPreview(dial.copy(accent = mixed), size = MIXER_PREVIEW_SIZE)
+                Text(
+                    mixed.hex,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ChannelSlider("Red", mixed.red) { onMix(mixed.withRed(it)) }
+                ChannelSlider("Green", mixed.green) { onMix(mixed.withGreen(it)) }
+                ChannelSlider("Blue", mixed.blue) { onMix(mixed.withBlue(it)) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onSettle) { Text("Use this colour") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * One channel of the colour being mixed. The slider is continuous and the value
+ * is rounded, rather than a slider of 256 steps: Material draws a tick for every
+ * step it is given, and 255 ticks is a striped bar.
+ */
+@Composable
+private fun ChannelSlider(label: String, value: Int, onValue: (Int) -> Unit) {
+    Column {
+        Text("$label $value", style = MaterialTheme.typography.labelLarge)
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValue(it.roundToInt()) },
+            valueRange = 0f..CHANNEL_MAX.toFloat(),
+            // The number is in the label above, which a slider does not say by
+            // itself, and out loud the two would otherwise be one anonymous bar.
+            modifier = Modifier.semantics { contentDescription = label },
         )
     }
 }
@@ -403,15 +529,32 @@ private fun Field(label: String, content: @Composable () -> Unit) {
     }
 }
 
-/** One colour to pick, named out loud because a circle of colour is only a colour. */
+/**
+ * One circle in the palette, named out loud because a circle of colour is only a
+ * colour.
+ *
+ * The mixer's circle holds the colour that was mixed when the Event has one, and
+ * the spectrum when it does not, so it shows either the colour in use or what it
+ * is for. Every circle is drawn with an outline, which is what keeps a white one
+ * a circle rather than a hole.
+ *
+ * @param choice which circle this is.
+ * @param inUse the Accent the Event has, which decides which circle is ringed.
+ */
 @Composable
-private fun AccentCircle(offered: NamedAccent, selected: Boolean, onClick: () -> Unit) {
+private fun AccentCircle(choice: AccentChoice, inUse: Accent, onClick: () -> Unit) {
+    val selected = accentChoiceOf(inUse) == choice
+    val filled = when (choice) {
+        is AccentChoice.Named -> SolidColor(Color(choice.named.accent.argb))
+        AccentChoice.Mixed ->
+            if (selected) SolidColor(Color(inUse.argb)) else Brush.sweepGradient(SPECTRUM)
+    }
     Box(
         modifier = Modifier
             .size(ACCENT_CIRCLE_DP.dp)
             .clip(CircleShape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = offered.label }
+            .semantics { contentDescription = accentChoiceLabel(choice, inUse) }
             .border(
                 width = if (selected) 3.dp else 1.dp,
                 color = if (selected) {
@@ -423,7 +566,7 @@ private fun AccentCircle(offered: NamedAccent, selected: Boolean, onClick: () ->
             )
             .padding(8.dp)
             .clip(CircleShape)
-            .background(Color(offered.accent.argb)),
+            .background(filled),
     )
 }
 

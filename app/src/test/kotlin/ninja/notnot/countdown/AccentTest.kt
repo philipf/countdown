@@ -9,12 +9,14 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
 /**
- * An Accent: any colour, the seven the editor offers by name, how one is written
- * down and read back, and how they are fitted onto a screen with no room for all
- * of them on one line.
+ * An Accent: any colour, the seven the editor offers by name, how one is mixed
+ * by hand, how one is written down and read back, and how the circles are fitted
+ * onto a screen with no room for all of them on one line.
  *
  * What a colour has to look like on the Dial is next door in `DialLayoutTest`,
- * with the rest of the Dial's colours.
+ * with the rest of the Dial's colours. That is a rule about the seven that are
+ * offered and about nothing else: a mixed colour answers to no rule at all, which
+ * is what ADR-0011 decided and what `Mixing` below holds it to.
  */
 class AccentTest {
 
@@ -259,19 +261,230 @@ class AccentTest {
     }
 
     @Nested
+    @DisplayName("Mixing one by hand")
+    inner class Mixing {
+
+        @Test
+        fun `is the three channels of the colour, so the mixer opens where the Event is`() {
+            val accent = Accent.of(0xFF12345F.toInt())
+
+            assertEquals(0x12, accent.red)
+            assertEquals(0x34, accent.green)
+            assertEquals(0x5F, accent.blue)
+        }
+
+        @Test
+        fun `takes every colour apart and puts it back as itself`() {
+            for (argb in SOME_COLOURS + EVERY_GREY) {
+                val accent = Accent.of(argb)
+                val remixed = accent.withRed(accent.red).withGreen(accent.green).withBlue(accent.blue)
+
+                assertEquals(accent, remixed, hex(argb))
+            }
+        }
+
+        @Test
+        fun `moves one channel and leaves the other two alone`() {
+            val accent = Accent.of(0xFF102030.toInt())
+
+            assertEquals(Accent.of(0xFFAA2030.toInt()), accent.withRed(0xAA))
+            assertEquals(Accent.of(0xFF10AA30.toInt()), accent.withGreen(0xAA))
+            assertEquals(Accent.of(0xFF1020AA.toInt()), accent.withBlue(0xAA))
+        }
+
+        @Test
+        fun `pulls a channel off the end of its slider back onto it`() {
+            // Off either end, rather than carrying into the channel beside it:
+            // a red of 256 that spilled would turn the colour green.
+            val accent = Accent.of(0xFF102030.toInt())
+
+            assertEquals(Accent.of(0xFFFF2030.toInt()), accent.withRed(CHANNEL_MAX + 1))
+            assertEquals(Accent.of(0xFFFF2030.toInt()), accent.withRed(9999))
+            assertEquals(Accent.of(0xFF002030.toInt()), accent.withRed(-1))
+            assertEquals(Accent.of(0xFF10FF30.toInt()), accent.withGreen(CHANNEL_MAX + 1))
+            assertEquals(Accent.of(0xFF102000.toInt()), accent.withBlue(-9999))
+        }
+
+        @Test
+        fun `makes a colour that is opaque like any other Accent`() {
+            for (argb in SOME_COLOURS) {
+                val mixed = Accent.of(0).withRed(argb ushr 16 and 0xFF)
+
+                assertEquals(0xFF, (mixed.argb ushr 24) and 0xFF, hex(argb))
+            }
+        }
+
+        @Test
+        fun `reaches every colour there is, from black to white`() {
+            // Three sliders from 0 to 255 and nothing in the way of any of them.
+            assertEquals(Accent.of(0xFF000000.toInt()), BLACK_MIX)
+            assertEquals(
+                Accent.of(0xFFFFFFFF.toInt()),
+                BLACK_MIX.withRed(CHANNEL_MAX).withGreen(CHANNEL_MAX).withBlue(CHANNEL_MAX),
+            )
+            for (argb in SOME_COLOURS + EVERY_GREY) {
+                assertEquals(
+                    Accent.of(argb),
+                    BLACK_MIX
+                        .withRed(argb shr 16 and 0xFF)
+                        .withGreen(argb shr 8 and 0xFF)
+                        .withBlue(argb and 0xFF),
+                    hex(argb),
+                )
+            }
+        }
+
+        @Test
+        fun `refuses nothing, not even the colour of the disc it is drawn on`() {
+            // ADR-0011: an Accent nobody can see is the owner's to pick and the
+            // owner's to change. Nothing here nudges a colour towards being
+            // legible, so white comes out as white.
+            val invisible = listOf(
+                DialColours.DISC,
+                0xFFFFFFFF.toInt(),
+                0xFFFEFEFE.toInt(),
+                0xFFFFFFFE.toInt(),
+            )
+
+            for (argb in invisible) {
+                val mixed = BLACK_MIX
+                    .withRed(argb shr 16 and 0xFF)
+                    .withGreen(argb shr 8 and 0xFF)
+                    .withBlue(argb and 0xFF)
+
+                assertEquals(Accent.of(argb), mixed, hex(argb))
+                assertEquals(Accent.of(argb), accentFrom(mixed.toStoredValue()), hex(argb))
+            }
+        }
+
+        @Test
+        fun `shows the colour as the six digits it is stored as`() {
+            assertEquals("#0A0B0C", Accent.of(0xFF0A0B0C.toInt()).hex)
+            assertEquals("#FFFFFF", Accent.of(0xFFFFFFFF.toInt()).hex)
+            assertEquals("#000000", Accent.of(0xFF000000.toInt()).hex)
+            // The same six digits either way round, so what the mixer says a
+            // colour is and what is written down cannot differ.
+            for (argb in SOME_COLOURS) {
+                assertEquals(Accent.of(argb), accentFrom(Accent.of(argb).hex), hex(argb))
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Which circle is the one in use")
+    inner class WhichCircle {
+
+        @Test
+        fun `is the colour's own circle for every colour the palette offers`() {
+            for (offered in NamedAccent.entries) {
+                assertEquals(AccentChoice.Named(offered), accentChoiceOf(offered.accent))
+            }
+        }
+
+        @Test
+        fun `is the mixer's for a colour nobody named, and not the nearest name`() {
+            // Reopening the editor has to show the colour the owner mixed. A
+            // near-blue that came back as Blue would recolour the Event the
+            // moment it was looked at.
+            val nearBlue = Accent.of(0xFF0288D2.toInt())
+
+            assertEquals(AccentChoice.Mixed, accentChoiceOf(nearBlue))
+            assertEquals(AccentChoice.Mixed, accentChoiceOf(Accent.of(0xFFFFFFFF.toInt())))
+            for (argb in UNNAMED_COLOURS) {
+                assertEquals(AccentChoice.Mixed, accentChoiceOf(Accent.of(argb)), hex(argb))
+            }
+        }
+
+        @Test
+        fun `is the name's circle when a mixed colour lands on an offered colour`() {
+            // Picking red and mixing the same red are one Accent (ADR-0010), so
+            // there is nothing to tell apart and no second circle to ring.
+            val mixedRed = Accent.of(0).withRed(0xD3).withGreen(0x2F).withBlue(0x2F)
+
+            assertEquals(NamedAccent.RED.accent, mixedRed)
+            assertEquals(AccentChoice.Named(NamedAccent.RED), accentChoiceOf(mixedRed))
+        }
+
+        @Test
+        fun `is exactly one circle, whatever the colour`() {
+            for (argb in SOME_COLOURS + EVERY_GREY) {
+                val choice = accentChoiceOf(Accent.of(argb))
+
+                assertEquals(1, ACCENT_CHOICES.count { it == choice }, hex(argb))
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Saying which circle is which")
+    inner class CircleNames {
+
+        @Test
+        fun `gives every circle something to say out loud`() {
+            for (inUse in (SOME_COLOURS + EVERY_GREY).map(Accent::of)) {
+                for (choice in ACCENT_CHOICES) {
+                    val label = accentChoiceLabel(choice, inUse)
+
+                    assertTrue(label.isNotBlank(), "$choice is offered with nothing to call it")
+                    assertFalse(label.contains('_'), "$label is a constant, not a name")
+                }
+            }
+        }
+
+        @Test
+        fun `calls a named circle what the palette calls it`() {
+            for (offered in NamedAccent.entries) {
+                assertEquals(
+                    offered.label,
+                    accentChoiceLabel(AccentChoice.Named(offered), Accent.DEFAULT),
+                )
+            }
+        }
+
+        @Test
+        fun `calls the mixer what it is for until there is a mixed colour in it`() {
+            assertEquals("Mix a colour", accentChoiceLabel(AccentChoice.Mixed, NamedAccent.RED.accent))
+            assertEquals(
+                "Mixed colour #C0FFEE",
+                accentChoiceLabel(AccentChoice.Mixed, Accent.of(0xFFC0FFEE.toInt())),
+            )
+        }
+
+        @Test
+        fun `never calls two circles the same thing`() {
+            for (inUse in (SOME_COLOURS + EVERY_GREY).map(Accent::of)) {
+                val labels = ACCENT_CHOICES.map { accentChoiceLabel(it, inUse) }
+
+                assertEquals(labels.size, labels.distinct().size, "two circles share a name at $inUse")
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("Fitting them across the editor")
     inner class Fitting {
 
         @Test
         fun `puts them all on one line when there is room`() {
-            assertEquals(listOf(NamedAccent.entries.toList()), accentsInLines(1000))
+            assertEquals(listOf(ACCENT_CHOICES), accentChoicesInLines(1000))
+        }
+
+        @Test
+        fun `offers the mixer after the colours, so it is the one that wraps`() {
+            assertEquals(
+                NamedAccent.entries.map(AccentChoice::Named) + AccentChoice.Mixed,
+                ACCENT_CHOICES,
+            )
         }
 
         @Test
         fun `wraps on the narrowest phone rather than running off the edge`() {
-            val lines = accentsInLines(NARROWEST_EDITOR_DP)
+            val lines = accentChoicesInLines(NARROWEST_EDITOR_DP)
 
-            assertTrue(lines.size > 1, "seven colours were claimed to fit across $NARROWEST_EDITOR_DP dp")
+            assertTrue(
+                lines.size > 1,
+                "${ACCENT_CHOICES.size} circles were claimed to fit across $NARROWEST_EDITOR_DP dp",
+            )
             for (line in lines) {
                 assertTrue(
                     lineWidth(line.size) <= NARROWEST_EDITOR_DP,
@@ -281,13 +494,9 @@ class AccentTest {
         }
 
         @Test
-        fun `offers every colour once, whatever the width`() {
+        fun `offers every circle once, whatever the width`() {
             for (widthDp in WIDTHS) {
-                assertEquals(
-                    NamedAccent.entries.toList(),
-                    accentsInLines(widthDp).flatten(),
-                    "at $widthDp dp",
-                )
+                assertEquals(ACCENT_CHOICES, accentChoicesInLines(widthDp).flatten(), "at $widthDp dp")
             }
         }
 
@@ -308,10 +517,10 @@ class AccentTest {
         }
 
         @Test
-        fun `keeps one colour on the line however little room there is`() {
+        fun `keeps one circle on the line however little room there is`() {
             for (widthDp in listOf(0, 1, 55, -100)) {
                 assertEquals(1, accentsAcross(widthDp), "at $widthDp dp")
-                assertEquals(NamedAccent.entries.size, accentsInLines(widthDp).size, "at $widthDp dp")
+                assertEquals(ACCENT_CHOICES.size, accentChoicesInLines(widthDp).size, "at $widthDp dp")
             }
         }
     }
@@ -346,6 +555,22 @@ class AccentTest {
 
         /** Every grey there is, so a rule is tried on more than a handful. */
         val EVERY_GREY: List<Int> = (0..0xFF).map { 0xFF shl 24 or (it * 0x010101) }
+
+        /**
+         * Colours the palette does not offer, one of them a hair off a colour it
+         * does, so "the nearest name" would be a real temptation.
+         */
+        val UNNAMED_COLOURS: List<Int> = listOf(
+            0xFFFFFFFF.toInt(),
+            0xFFFFEB3B.toInt(),
+            0xFF0288D2.toInt(),
+            0xFF757576.toInt(),
+            0xFF010101.toInt(),
+            0xFF7B1FA2.toInt(),
+        )
+
+        /** Where the mixer starts when it is asked to reach a colour from nothing. */
+        val BLACK_MIX: Accent = Accent.of(0).withRed(0).withGreen(0).withBlue(0)
 
         /** How wide a line of [count] Accents is drawn, gaps included. */
         fun lineWidth(count: Int): Int =

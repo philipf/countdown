@@ -46,8 +46,9 @@ drawn are untouched.
     it is counting towards.
 11. As the owner, I want to leave the title blank, so that an obvious Event
     doesn't need naming.
-12. As the owner, I want to pick an Accent from seven colours, so that the widget
-    suits my home screen.
+12. As the owner, I want to pick an Accent from seven colours, or mix my own from
+    its red, green and blue, so that the widget is the colour my home screen
+    wants and not the nearest of seven.
 13. As the owner, I want every change saved as I make it, so that there is no
     Save button and nothing to lose.
 14. As the owner, I want a live Dial preview above the fields, so that I see the
@@ -87,8 +88,13 @@ drawn are untouched.
     that I feel it getting closer without reading the number.
 30. As the owner, I want a transparent background, so that the Dial sits on my
     wallpaper instead of on a card.
-31. As the owner, I want the Progress Arc visible against the white disc
-    whichever Accent I pick, so that no colour choice is a bad one.
+31. Withdrawn. This asked for the Progress Arc to be visible against the white
+    disc whichever Accent was picked, so that no colour choice was a bad one.
+    Mixing a colour by hand takes that promise away: every colour is allowed,
+    white included, and none is refused, warned about or nudged. The number of
+    days is the widget and the arc is a decoration on it, so the worst a colour
+    nobody can see costs is picking again. The seven the editor offers are still
+    held to the rule. See ADR-0011.
 32. As the owner, I want to resize the widget, so that I can make it as big as it
     deserves.
 33. As the owner, I want the Dial redrawn at the new size when I resize, so that
@@ -203,8 +209,11 @@ value in and a value out:
 - The order the list is shown in.
 - Resolving a widget to its Event: an `appWidgetId` and what is stored give an
   Event, or nothing when the binding is missing or names an Event that is gone.
-- How the palette is laid out: a width in dp gives the lines the Accents are
+- How the palette is laid out: a width in dp gives the lines the circles are
   offered in, so a phone too narrow for one line wraps rather than clips.
+- Which circle in the palette an Accent is: one of the seven, or the mixer's.
+- Mixing a colour: a colour and a channel moved give another colour, so what the
+  sliders can and cannot reach is a value in and a value out.
 
 The renderer draws exactly a `DialState` and decides nothing. Storage, alarms,
 the Canvas and Compose all sit outside these functions and are not tested.
@@ -236,12 +245,26 @@ dark gold rather than a bright yellow, which is the same colour as the disc as
 far as an eye at arm's length is concerned. That rule is on what the app offers
 rather than on what an Accent can be.
 
+Beside the seven is the way to mix a colour that is not among them: three
+sliders, red, green and blue, with the Event's own Dial above them so the colour
+is seen on the white disc as it arrives. The mixer opens on the Accent the Event
+already has, so a colour that is nearly right is nudged rather than started
+again, and nothing is written until the owner settles on one — backing out leaves
+the Accent exactly as it was.
+
+Every colour is allowed, white and every other unreadable colour included. None
+is refused, warned about, or quietly moved somewhere more legible. See ADR-0011,
+which is also where PRD story 31 went.
+
 An offered colour is stored under its name and any other colour as a hex, so a
 shade corrected here follows the Events already holding it. See ADR-0010. An
 Accent is always opaque: the arc is drawn on the disc and not through it.
 
-Seven do not fit across a narrow phone in one line, so the editor lays them out
-in as many lines as the width it is given needs.
+The editor's palette is eight circles — the seven colours, then the mixer — and
+they do not fit across a narrow phone in one line, so it lays them out in as many
+lines as the width it is given needs. An Accent that is one of the seven is shown
+as that colour's own circle and any other as the mixer's, so reopening the editor
+shows the colour in use rather than the named colour nearest to it.
 
 ### Day Rollover
 
@@ -314,8 +337,21 @@ behaviour.
     and a name written by any older build still means the colour it meant.
   - A colour nobody named is stored as a hex and reads back as the same colour,
     and nothing that is neither a name nor a hex is read as either.
-  - The lines they are offered in: one line when there is room, more than one on
-    the narrowest phone, and every colour offered exactly once at any width.
+  - The lines the circles are offered in: one line when there is room, more than
+    one on the narrowest phone, and every circle offered exactly once at any
+    width, the mixer's last.
+  - Which circle an Accent is: each of the seven its own, and anything else the
+    mixer's rather than the named colour nearest to it.
+  - What each circle says out loud, including the mixer's two answers: what it is
+    for, and which colour it is holding.
+- Cases to cover for mixing a colour:
+  - A colour taken apart into its three channels and put back is the same colour.
+  - Moving one channel leaves the other two alone.
+  - A value off either end of a slider is pulled back onto it rather than
+    carrying into the channel beside it.
+  - Every colour there is can be reached, black and white included, and none is
+    refused, moved or made more legible on the way through.
+  - A mixed colour that lands on one of the seven is that colour, name and all.
 - The renderer, the alarm chain, the widget provider, the chooser activity and
   the reads and writes to disk are not tested. They are thin, and a wrong Dial is
   visible on the home screen within a day.
@@ -331,7 +367,8 @@ behaviour.
 - Adding an Event from the widget's chooser. It sends you to the app.
 - Play Store release, app signing by Google, update checks.
 - Backup, sync, export, or moving Events between devices.
-- A custom colour picker, custom fonts, or a light/dark variant of the Dial.
+- Custom fonts, or a light/dark variant of the Dial. Mixing a colour by hand was
+  on this list and is not any more. See ADR-0011.
 - Lock screen widgets, Wear OS, tiles, or shortcuts.
 - Localisation. Labels are English.
 
@@ -341,7 +378,8 @@ behaviour.
   be the newest LTS. This is checked when the build first runs, not assumed.
 - Text inside the Dial ignores the system font size setting, because the Dial is
   a bitmap. This is accepted, and noted in ADR-0002.
-- The Accent colours were chosen to be visible on a white disc. Any future
-  palette change has the same constraint.
+- The seven Accent colours the editor offers were chosen to be visible on a white
+  disc, and any future palette change has the same constraint. A colour the owner
+  mixes has none: it is drawn as asked, however it comes out.
 - Nothing limits how many Events there can be. `SharedPreferences` would be the
   wrong home for thousands, and nothing in the app can make thousands.
