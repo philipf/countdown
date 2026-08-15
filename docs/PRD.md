@@ -192,8 +192,8 @@ offered — it would be invisible on the white disc.
 
 - Toolchain via mise, pinned in the repo. See ADR-0004.
 - A release keystore is generated once and kept outside the repo. Its path and
-  passwords come from a gitignored properties file. The APK is installed over
-  `adb`.
+  key name are plain build config; its password is kept in `pass`. See ADR-0005.
+  The APK is installed over `adb`.
 
 ## Testing Decisions
 

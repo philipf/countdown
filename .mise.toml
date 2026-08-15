@@ -49,7 +49,7 @@ yes | "$sdkmanager" --licenses > /dev/null
 """
 
 [tasks.keystore]
-description = "Generate the release keystore outside the repo and write keystore.properties"
+description = "Generate the release keystore outside the repo and keep its password in pass"
 run = "./tools/make-keystore.sh"
 
 [tasks.build]
