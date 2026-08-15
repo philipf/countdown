@@ -15,14 +15,16 @@ gradle = "9.7.0"
 postinstall = "mise run install-sdk"
 
 [env]
-# The SDK lives in the repo and is gitignored, so nothing lands system-wide.
-ANDROID_HOME = "{{config_root}}/.android-sdk"
-ANDROID_SDK_ROOT = "{{config_root}}/.android-sdk"
-# Ahead of the mise install dir, so sdkmanager and avdmanager resolve the SDK
-# in the repo rather than an empty one next to themselves.
+# The SDK sits in the user's data dir, not in the repo: one copy is shared by
+# every worktree, so a new worktree needs no download and removing one leaves
+# the SDK alone. Still nothing system-wide — `rm -rf` on the path undoes it.
+ANDROID_HOME = "{{xdg_data_home}}/countdown/android-sdk"
+ANDROID_SDK_ROOT = "{{xdg_data_home}}/countdown/android-sdk"
+# Ahead of the mise install dir, so sdkmanager and avdmanager resolve the shared
+# SDK rather than an empty one next to themselves.
 _.path = [
-  "{{config_root}}/.android-sdk/cmdline-tools/latest/bin",
-  "{{config_root}}/.android-sdk/platform-tools",
+  "{{xdg_data_home}}/countdown/android-sdk/cmdline-tools/latest/bin",
+  "{{xdg_data_home}}/countdown/android-sdk/platform-tools",
 ]
 
 [tasks.install-sdk]
