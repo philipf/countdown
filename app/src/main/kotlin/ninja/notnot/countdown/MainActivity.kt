@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -340,13 +341,24 @@ private fun EventEditor(
                 )
 
                 Field("Accent") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        for (accent in Accent.entries) {
-                            AccentSwatch(
-                                accent = accent,
-                                selected = accent == stored.accent,
-                                onClick = { edit { it.withAccent(accent) } },
-                            )
+                    // The colours do not all fit across a narrow phone, so the
+                    // width they have is measured here and how it is filled is
+                    // decided by accentsInLines. A single line would run the
+                    // last colours off the edge, where they cannot be tapped.
+                    BoxWithConstraints {
+                        val lines = accentsInLines(maxWidth.value.toInt())
+                        Column(verticalArrangement = Arrangement.spacedBy(ACCENT_GAP_DP.dp)) {
+                            for (line in lines) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(ACCENT_GAP_DP.dp)) {
+                                    for (accent in line) {
+                                        AccentCircle(
+                                            accent = accent,
+                                            selected = accent == stored.accent,
+                                            onClick = { edit { it.withAccent(accent) } },
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -391,11 +403,12 @@ private fun Field(label: String, content: @Composable () -> Unit) {
     }
 }
 
+/** One colour to pick, named out loud because a circle of colour is only a colour. */
 @Composable
-private fun AccentSwatch(accent: Accent, selected: Boolean, onClick: () -> Unit) {
+private fun AccentCircle(accent: Accent, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(56.dp)
+            .size(ACCENT_CIRCLE_DP.dp)
             .clip(CircleShape)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .semantics { contentDescription = accent.label }
@@ -446,12 +459,3 @@ private fun EventDatePicker(
         DatePicker(state = state)
     }
 }
-
-/** How an Accent is named out loud, since a swatch is only a colour. */
-private val Accent.label: String
-    get() = when (this) {
-        Accent.BLUE -> "Blue"
-        Accent.BLACK -> "Black"
-        Accent.MID_GREY -> "Mid grey"
-        Accent.RED -> "Red"
-    }

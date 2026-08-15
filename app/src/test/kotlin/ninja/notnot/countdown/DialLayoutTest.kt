@@ -127,6 +127,17 @@ class DialLayoutTest {
         }
 
         @Test
+        fun `yellow is dark enough to read, where the yellow a palette usually has is not`() {
+            assertTrue(
+                contrastAgainstWhite(Accent.YELLOW.argb) >= 3.0,
+                "yellow is ${contrastAgainstWhite(Accent.YELLOW.argb)} against white",
+            )
+            // The obvious yellow, and the reason the palette's is a dark gold: a
+            // rule that let this one through would be saying nothing.
+            assertTrue(contrastAgainstWhite(BRIGHT_YELLOW) < 3.0)
+        }
+
+        @Test
         fun `the disc is opaque white`() {
             assertEquals(0xFFFFFFFF.toInt(), DialColours.DISC)
         }
@@ -145,6 +156,23 @@ class DialLayoutTest {
                 assertEquals(accent.argb and 0x00FFFFFF, track and 0x00FFFFFF, "$accent changed hue")
                 assertTrue(alpha(track) < alpha(accent.argb), "$accent track is not faded")
                 assertTrue(alpha(track) > 0, "$accent track is invisible")
+            }
+        }
+
+        @Test
+        fun `the faded track still reads against the disc`() {
+            // Fading is what makes the track the space the arc has yet to fill,
+            // and a colour faded to nothing would leave the Dial looking
+            // unfinished rather than unfilled. Blue's and mid-grey's tracks are
+            // the faintest the palette has ever had, so they are the bar a new
+            // colour has to clear.
+            for (accent in Accent.entries) {
+                val contrast = contrastAgainstWhite(over(DialColours.DISC, trackColour(accent)))
+
+                assertTrue(
+                    contrast >= FAINTEST_TRACK,
+                    "$accent's track is only $contrast against the disc",
+                )
             }
         }
     }
@@ -313,7 +341,24 @@ class DialLayoutTest {
     private companion object {
         val SIZES = listOf(1, 2, 17, 64, 128, 300, 512, 1080, 4096)
 
+        /** Material's Yellow 500, which is what "yellow" means until it is looked at. */
+        const val BRIGHT_YELLOW = 0xFFFFEB3B.toInt()
+
+        /** The faintest the palette's tracks have ever been, on the same scale. */
+        const val FAINTEST_TRACK = 1.18
+
         fun alpha(argb: Int): Int = (argb ushr 24) and 0xFF
+
+        /** [foreground] laid over an opaque [background], as the Canvas would. */
+        fun over(background: Int, foreground: Int): Int {
+            val weight = alpha(foreground) / 255.0
+            val channels = listOf(16, 8, 0).map { shift ->
+                val front = (foreground ushr shift) and 0xFF
+                val back = (background ushr shift) and 0xFF
+                (front * weight + back * (1 - weight)).toInt() shl shift
+            }
+            return channels.fold(0xFF shl 24) { colour, channel -> colour or channel }
+        }
 
         /** WCAG relative luminance, so "visible against white" is a number, not an opinion. */
         fun contrastAgainstWhite(argb: Int): Double {

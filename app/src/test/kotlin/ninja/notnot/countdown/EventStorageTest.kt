@@ -194,6 +194,28 @@ class EventStorageTest {
         }
 
         @Test
+        fun `every Accent is written under its own name and reads back as itself`() {
+            for (accent in Accent.entries) {
+                val values = anchoredEvent().withAccent(accent).toValues()
+
+                assertEquals(accent.name, values[EventKeys.ACCENT])
+                assertEquals(accent, storedEventFrom(values).accent, "$accent came back as something else")
+            }
+        }
+
+        @Test
+        fun `the names in use before the palette grew still read as the colours they did`() {
+            // An Event stored by an older build names its Accent, not its place
+            // in the list, so adding colours to the end of the list cannot
+            // recolour an Event already on someone's phone.
+            for (name in listOf("BLUE", "BLACK", "MID_GREY", "RED")) {
+                val stored = storedEventFrom(mapOf(EventKeys.ACCENT to name))
+
+                assertEquals(name, stored.accent.name)
+            }
+        }
+
+        @Test
         fun `every key written is a key read`() {
             assertEquals(EventKeys.ALL.toSet(), anchoredEvent().toValues().keys)
         }

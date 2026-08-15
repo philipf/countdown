@@ -41,7 +41,7 @@ has passed. Empty on the Anchor Date, full on the Event Date.
 _Avoid_: Ring, gauge, progress bar
 
 **Accent**:
-The colour the user picks for the Progress Arc. One of four fixed colours.
+The colour the user picks for the Progress Arc. One of seven fixed colours.
 _Avoid_: Theme, colour scheme, swatch
 
 **Day Rollover**:

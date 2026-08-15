@@ -46,7 +46,7 @@ drawn are untouched.
     it is counting towards.
 11. As the owner, I want to leave the title blank, so that an obvious Event
     doesn't need naming.
-12. As the owner, I want to pick an Accent from four colours, so that the widget
+12. As the owner, I want to pick an Accent from seven colours, so that the widget
     suits my home screen.
 13. As the owner, I want every change saved as I make it, so that there is no
     Save button and nothing to lose.
@@ -203,6 +203,8 @@ value in and a value out:
 - The order the list is shown in.
 - Resolving a widget to its Event: an `appWidgetId` and what is stored give an
   Event, or nothing when the binding is missing or names an Event that is gone.
+- How the palette is laid out: a width in dp gives the lines the Accents are
+  offered in, so a phone too narrow for one line wraps rather than clips.
 
 The renderer draws exactly a `DialState` and decides nothing. Storage, alarms,
 the Canvas and Compose all sit outside these functions and are not tested.
@@ -223,8 +225,17 @@ the Canvas and Compose all sit outside these functions and are not tested.
 
 ### Accent palette
 
-Four fixed colours: blue `#0288D1` (default), black, mid-grey, red. White is not
-offered — it would be invisible on the white disc.
+Seven fixed colours: blue `#0288D1` (default), black `#000000`, mid-grey
+`#757575`, red `#D32F2F`, green `#2E7D32`, pink `#E91E63`, yellow `#8A7500`.
+White is not offered — it would be invisible on the white disc.
+
+Every one of them has to hold up on that disc twice over: as the filled arc, and
+as the faded track behind it. That is what makes the yellow a dark gold rather
+than a bright yellow, which is the same colour as the disc as far as an eye at
+arm's length is concerned.
+
+Seven do not fit across a narrow phone in one line, so the editor lays them out
+in as many lines as the width it is given needs.
 
 ### Day Rollover
 
@@ -290,6 +301,13 @@ behaviour.
   - An `appWidgetId` with no binding resolves to nothing.
   - A binding naming a deleted Event resolves to nothing.
   - Removing a binding leaves the other widgets' bindings alone.
+- Cases to cover for the palette:
+  - Every Accent reads on the white disc, as the filled arc and as the faded
+    track, yellow included.
+  - Every Accent is stored under its own name and reads back as itself, and a
+    name written by an older build still means the colour it meant.
+  - The lines they are offered in: one line when there is room, more than one on
+    the narrowest phone, and every colour offered exactly once at any width.
 - The renderer, the alarm chain, the widget provider, the chooser activity and
   the reads and writes to disk are not tested. They are thin, and a wrong Dial is
   visible on the home screen within a day.
@@ -315,7 +333,7 @@ behaviour.
   be the newest LTS. This is checked when the build first runs, not assumed.
 - Text inside the Dial ignores the system font size setting, because the Dial is
   a bitmap. This is accepted, and noted in ADR-0002.
-- The four Accent colours were chosen to be visible on a white disc. Any future
+- The Accent colours were chosen to be visible on a white disc. Any future
   palette change has the same constraint.
 - Nothing limits how many Events there can be. `SharedPreferences` would be the
   wrong home for thousands, and nothing in the app can make thousands.
