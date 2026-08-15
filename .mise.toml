@@ -5,9 +5,14 @@
 [tools]
 java = "temurin-21.0.12"
 gradle = "9.7.0"
-# Android command line tools, which provide sdkmanager. The postinstall hook
-# then uses sdkmanager to fill ANDROID_HOME, so `mise install` is enough.
-"android-sdk" = { version = "22.0", postinstall = "mise run sdk" }
+# Android command line tools, which provide sdkmanager.
+"android-sdk" = "22.0"
+
+[hooks]
+# Fills ANDROID_HOME, so `mise install` is the whole setup. This runs on every
+# `mise install`, including when the tools above are already there — a
+# tool-level postinstall would be skipped and leave ANDROID_HOME empty.
+postinstall = "mise run install-sdk"
 
 [env]
 # The SDK lives in the repo and is gitignored, so nothing lands system-wide.
@@ -20,7 +25,7 @@ _.path = [
   "{{config_root}}/.android-sdk/platform-tools",
 ]
 
-[tasks.sdk]
+[tasks.install-sdk]
 description = "Install the Android SDK packages into ANDROID_HOME"
 run = """
 set -e
@@ -28,10 +33,13 @@ set -e
 # they have to live inside it or they read an empty SDK and say nothing useful.
 mkdir -p "$ANDROID_HOME/cmdline-tools"
 rm -rf "$ANDROID_HOME/cmdline-tools/latest"
-cp -r "$(dirname "$(dirname "$(command -v sdkmanager)")")" "$ANDROID_HOME/cmdline-tools/latest"
+# Named off the mise install rather than PATH, which by now points at the copy.
+cp -r "$(find "$(mise where android-sdk)/cmdline-tools" -mindepth 1 -maxdepth 1 -type d)" \
+  "$ANDROID_HOME/cmdline-tools/latest"
 
 sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 yes | "$sdkmanager" --licenses > /dev/null
+# platform-tools has no versioned package path, so adb is whatever is current.
 "$sdkmanager" \
   "platform-tools" \
   "build-tools;37.0.0" \

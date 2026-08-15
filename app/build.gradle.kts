@@ -18,30 +18,24 @@ val keystoreProperties = Properties().apply {
 
 // A task class rather than a doLast block: a lambda in a Kotlin build script
 // captures the script object, which the configuration cache cannot serialize.
+// It re-reads the file at execution time so the message always matches reality.
 abstract class VerifyReleaseSigning : DefaultTask() {
     @get:Input
     abstract val propertiesPath: Property<String>
 
+    /** Relative `storeFile` values resolve against this, as the signing config does. */
     @get:Input
-    abstract val propertiesExist: Property<Boolean>
-
-    @get:Input
-    abstract val blankSettings: ListProperty<String>
-
-    @get:Input
-    abstract val storePath: Property<String>
-
-    @get:Input
-    abstract val storeExists: Property<Boolean>
+    abstract val resolveStoreAgainst: Property<String>
 
     @TaskAction
     fun verify() {
-        if (!propertiesExist.get()) {
+        val propertiesFile = File(propertiesPath.get())
+        if (!propertiesFile.exists()) {
             throw GradleException(
                 """
                 Cannot build a release APK: keystore.properties is missing.
 
-                Create it at ${propertiesPath.get()} by copying keystore.properties.example,
+                Create it at $propertiesFile by copying keystore.properties.example,
                 or generate both the keystore and the file with:
 
                     mise run keystore
@@ -50,33 +44,32 @@ abstract class VerifyReleaseSigning : DefaultTask() {
                 """.trimIndent(),
             )
         }
-        val blank = blankSettings.get()
+        val properties = Properties().apply { propertiesFile.inputStream().use { load(it) } }
+        val blank = REQUIRED.filter { properties.getProperty(it).isNullOrBlank() }
         if (blank.isNotEmpty()) {
             throw GradleException(
-                "Cannot build a release APK: ${propertiesPath.get()} is missing " +
+                "Cannot build a release APK: $propertiesFile is missing " +
                     "${blank.joinToString(", ")}. See keystore.properties.example.",
             )
         }
-        if (!storeExists.get()) {
+        val store = File(resolveStoreAgainst.get()).resolve(properties.getProperty("storeFile"))
+        if (!store.exists()) {
             throw GradleException(
-                "Cannot build a release APK: the keystore at ${storePath.get()} does not " +
-                    "exist. Generate one with `mise run keystore`.",
+                "Cannot build a release APK: the keystore at $store does not exist. " +
+                    "Generate one with `mise run keystore`.",
             )
         }
+    }
+
+    private companion object {
+        val REQUIRED = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
     }
 }
 
 val verifyReleaseSigning = tasks.register<VerifyReleaseSigning>("verifyReleaseSigning") {
     description = "Fails with an explanation when release signing details are missing."
     propertiesPath.set(keystorePropertiesFile.absolutePath)
-    propertiesExist.set(keystorePropertiesFile.exists())
-    blankSettings.set(
-        listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
-            .filter { keystoreProperties.getProperty(it).isNullOrBlank() },
-    )
-    val store = keystoreProperties.getProperty("storeFile").orEmpty()
-    storePath.set(store)
-    storeExists.set(store.isNotBlank() && File(store).exists())
+    resolveStoreAgainst.set(rootProject.projectDir.absolutePath)
 }
 
 // preReleaseBuild is AGP's anchor task for the release variant, so the check runs
@@ -102,10 +95,13 @@ android {
 
     signingConfigs {
         create("release") {
-            keystoreProperties.getProperty("storeFile")?.let { storeFile = file(it) }
+            // rootProject.file, matching how verifyReleaseSigning resolves it.
+            keystoreProperties.getProperty("storeFile")?.let { storeFile = rootProject.file(it) }
             storePassword = keystoreProperties.getProperty("storePassword")
             keyAlias = keystoreProperties.getProperty("keyAlias")
             keyPassword = keystoreProperties.getProperty("keyPassword")
+            // v3 so the key can be rotated later without orphaning installs.
+            enableV3Signing = true
         }
     }
 
@@ -116,6 +112,8 @@ android {
         }
     }
 
+    // 17, not the JDK's own 21: this is the bytecode level d8 has to swallow, and
+    // it is independent of the JDK the build runs on.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

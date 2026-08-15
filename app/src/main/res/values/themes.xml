@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+      Only the window theme, used until Compose draws. The UI itself comes from
+      MaterialTheme, so this needs nothing beyond a background and no action bar.
+    -->
     <style name="Theme.Countdown" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

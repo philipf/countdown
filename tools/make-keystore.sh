@@ -4,7 +4,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-keystore_dir="${COUNTDOWN_KEYSTORE_DIR:-$HOME/.android-keystores}"
+keystore_dir="$HOME/.android-keystores"
 keystore="$keystore_dir/countdown-release.jks"
 props="$repo_root/keystore.properties"
 alias="countdown"
