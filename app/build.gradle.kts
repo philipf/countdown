@@ -249,7 +249,14 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
+            // Compose ships thousands of classes and the app reaches a sliver of
+            // them, so without R8 the APK is mostly dependency it never runs.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
@@ -258,6 +265,13 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // The app is written in English and has no translations of its own, so the
+    // only thing the other locales carry is AndroidX's own strings. Dropping
+    // them empties most of resources.arsc.
+    androidResources {
+        localeFilters += listOf("en")
     }
 
     buildFeatures {
