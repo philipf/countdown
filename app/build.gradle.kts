@@ -277,6 +277,11 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    // The back arrow, which is the only icon the app draws from a library.
+    // Material 3 used to bring the core icons with it and no longer does, so
+    // they are asked for by name. Core, not extended: extended is thousands of
+    // icons for the one.
+    implementation(libs.compose.material.icons.core)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

@@ -24,12 +24,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -291,7 +295,15 @@ private fun EventEditor(
         topBar = {
             TopAppBar(
                 title = { Text(rowTitle(stored)) },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+                // The arrow every other app puts here, rather than the word: it
+                // is what a phone's owner already reads as the way back, and it
+                // is the AutoMirrored one, so a right-to-left locale points it
+                // the other way instead of at the wrong edge of the screen.
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 windowInsets = topBarInsets,
             )
         },

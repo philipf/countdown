@@ -20,6 +20,10 @@ import org.junit.jupiter.api.Test
  * app has asks for the app's insets, and every bar at the top of one asks for
  * the top bar's. A fourth screen added without them fails here rather than on
  * someone's phone.
+ *
+ * What a top bar puts in its navigation slot is read the same way and for the
+ * same reason: which glyph is drawn there, and which way it points in a
+ * right-to-left locale, is another thing only a device shows.
  */
 class ScreenTest {
 
@@ -55,6 +59,37 @@ class ScreenTest {
                     "$screen has a top bar whose own title could go under the cutout",
                 )
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("The way back")
+    inner class TheWayBack {
+
+        @Test
+        fun `is the arrow the rest of Android draws, and says so out loud`() {
+            // A word in the navigation slot works and reads wrong: the arrow is
+            // what a phone's owner already knows, and only a device shows that.
+            // AutoMirrored because a right-to-left locale wants it the other way
+            // round, which no test on this side of the glass can see either.
+            var slots = 0
+            for (screen in SCREENS) {
+                val source = appSource(screen)
+                val backs = count("""navigationIcon = """, source)
+                slots += backs
+
+                assertEquals(
+                    backs,
+                    count("""Icons\.AutoMirrored\.Filled\.ArrowBack""", source),
+                    "$screen goes back by something other than the standard arrow",
+                )
+                assertEquals(
+                    backs,
+                    count("""contentDescription = "Back"""", source),
+                    "$screen has an arrow that is only an arrow out loud",
+                )
+            }
+            assertTrue(slots > 0, "no screen has a way back in its top bar any more")
         }
     }
 
