@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.widget.RemoteViews
 import java.time.LocalDate
 
@@ -14,11 +15,13 @@ import java.time.LocalDate
  *
  * There is one Event app-wide, so a copy of the widget has nothing of its own to
  * configure: there is no configuration activity, no per-instance state, and
- * every copy is sent the same Dial.
+ * every copy of a given size is sent the same Dial.
  *
  * The layout is a single `ImageView` holding the bitmap from [renderDial], as
  * ADR-0002 has it, so the widget and the config screen preview cannot disagree.
- * Everything this file decides beyond that is in [dialPixelSize].
+ * A bitmap cannot be resized after the fact, so the Dial is drawn again at the
+ * new pixel size whenever the widget is dragged to a new one. Everything this
+ * file decides beyond that is in [widgetSquareDp] and [dialPixelSize].
  */
 class CountdownWidget : AppWidgetProvider() {
     override fun onUpdate(
@@ -27,6 +30,19 @@ class CountdownWidget : AppWidgetProvider() {
         appWidgetIds: IntArray,
     ) {
         drawDial(context, appWidgetManager, appWidgetIds)
+    }
+
+    /**
+     * The widget has been resized. Only the copy that moved needs redrawing, and
+     * it needs a new bitmap rather than the old one stretched.
+     */
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        drawDial(context, appWidgetManager, intArrayOf(appWidgetId))
     }
 }
 
@@ -48,9 +64,54 @@ private fun drawDial(context: Context, manager: AppWidgetManager, appWidgetIds: 
     // Read on the calling thread. This runs in a broadcast receiver, where
     // blocking is simpler and safer than a coroutine.
     val state = dialState(EventStore(context).read().toEvent(), LocalDate.now())
-    val sizePx = dialPixelSize(WIDGET_SIZE_DP, context.resources.displayMetrics.density)
+    val density = context.resources.displayMetrics.density
 
-    val views = RemoteViews(context.packageName, R.layout.widget_dial).apply {
+    // Every copy shows the same Event, so copies of the same size still share
+    // one bitmap and one update. Only a copy dragged to a different size needs
+    // one of its own.
+    for ((sizePx, ids) in appWidgetIds.groupBy { dialSizeOf(manager, it, density) }) {
+        send(context, manager, ids.toIntArray(), state, sizePx)
+    }
+}
+
+/** How big to draw the Dial for one copy of the widget, at its current size. */
+private fun dialSizeOf(manager: AppWidgetManager, appWidgetId: Int, density: Float): Int {
+    val options = manager.getAppWidgetOptions(appWidgetId) ?: Bundle.EMPTY
+    val sizeDp = widgetSquareDp(
+        minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
+        maxWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
+        minHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
+        maxHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT),
+    )
+    return dialPixelSize(sizeDp, density)
+}
+
+/**
+ * Sends the Dial, and on a refusal sends a smaller one rather than leaving the
+ * home screen blank. See [smallerDialSize] for why that should never happen and
+ * why it is caught anyway. The last refusal is thrown: by then the Dial is as
+ * small as it goes and the fault is something else.
+ */
+private fun send(
+    context: Context,
+    manager: AppWidgetManager,
+    appWidgetIds: IntArray,
+    state: DialState,
+    wantedPx: Int,
+) {
+    var sizePx = wantedPx
+    while (true) {
+        try {
+            manager.updateAppWidget(appWidgetIds, dialViews(context, state, sizePx))
+            return
+        } catch (refused: RuntimeException) {
+            sizePx = smallerDialSize(sizePx) ?: throw refused
+        }
+    }
+}
+
+private fun dialViews(context: Context, state: DialState, sizePx: Int): RemoteViews =
+    RemoteViews(context.packageName, R.layout.widget_dial).apply {
         setImageViewBitmap(R.id.dial, renderDial(state, sizePx))
         // The Dial is a bitmap, so it has to say out loud what it shows.
         setContentDescription(R.id.dial, spokenAs(state))
@@ -58,10 +119,6 @@ private fun drawDial(context: Context, manager: AppWidgetManager, appWidgetIds: 
         // how the owner sets one.
         setOnClickPendingIntent(R.id.dial, openTheApp(context))
     }
-
-    // One `RemoteViews` for the lot, because every copy shows the same Event.
-    manager.updateAppWidget(appWidgetIds, views)
-}
 
 private fun openTheApp(context: Context): PendingIntent =
     PendingIntent.getActivity(

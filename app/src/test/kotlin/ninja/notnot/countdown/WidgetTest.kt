@@ -8,50 +8,104 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
 /**
- * The widget's one real decision — how big the Dial may be drawn — and the
- * declarations the launcher reads.
+ * The widget's two real decisions — how big a square the widget gives the Dial,
+ * and how many pixels of it are worth drawing — and the declarations the
+ * launcher reads.
  *
- * The size matters because a bitmap too big for the Binder transaction throws in
- * the launcher's process, where no test and no build can see it. So the cap is a
- * number here, checked against the buffer rather than eyeballed.
+ * The size matters because a bitmap the framework refuses fails in the
+ * launcher's process, where no test and no build can see it. So the ceiling is
+ * arithmetic here rather than an eyeballed number.
  *
  * The declarations are checked as text because there is no other way to see them
- * without a device, and because two of the acceptance criteria — no
- * configuration activity, a single ImageView — are entirely decided by them.
+ * without a device, and because several of the acceptance criteria — resizable,
+ * 2x2 minimum and default, no configuration activity, a single centred
+ * ImageView — are entirely decided by them.
  */
 class WidgetTest {
 
     @Nested
-    @DisplayName("The transaction limit")
-    inner class TransactionLimit {
+    @DisplayName("The framework's bitmap ceiling")
+    inner class BitmapCeiling {
 
         @Test
-        fun `the largest Dial costs what the cap says it does`() {
-            assertEquals(409_600L, dialBitmapBytes(MAX_DIAL_SIZE_PX))
+        fun `is one and a half screens' worth of pixels`() {
+            assertEquals(15_552_000L, widgetBitmapCeilingBytes(1080, 2400))
+            assertEquals(5_529_600L, widgetBitmapCeilingBytes(720, 1280))
         }
 
         @Test
-        fun `the largest Dial leaves most of the buffer free`() {
-            val bytes = dialBitmapBytes(MAX_DIAL_SIZE_PX)
+        fun `a Dial as big as the screen allows still fits inside it`() {
+            for ((width, height) in SCREENS) {
+                // The widget cannot be bigger than the screen, so this is the
+                // largest square any launcher on this screen could ask for.
+                val bytes = dialBitmapBytes(minOf(width, height))
+                val ceiling = widgetBitmapCeilingBytes(width, height)
 
-            assertTrue(
-                bytes <= BUDGET_BYTES,
-                "the Dial takes $bytes bytes of a ${TRANSACTION_BUFFER_BYTES}-byte buffer, " +
-                    "over the $BUDGET_BYTES it is allowed",
-            )
-            assertTrue(
-                TRANSACTION_BUFFER_BYTES - bytes >= HALF_THE_BUFFER,
-                "less than half the buffer is left for the rest of the transaction",
-            )
-        }
-
-        @Test
-        fun `no screen density can push the Dial over the budget`() {
-            for (density in DENSITIES) {
-                val bytes = dialBitmapBytes(dialPixelSize(WIDGET_SIZE_DP, density))
-
-                assertTrue(bytes <= BUDGET_BYTES, "density $density gave $bytes bytes")
+                assertTrue(
+                    bytes <= ceiling * 2 / 3,
+                    "${width}x$height: a full-screen Dial takes $bytes of $ceiling bytes",
+                )
             }
+        }
+
+        @Test
+        fun `the largest Dial drawn costs what the cap says it does`() {
+            assertEquals(4_665_600L, dialBitmapBytes(MAX_DIAL_SIZE_PX))
+        }
+
+        @Test
+        fun `no widget size and no screen density can push the Dial past the cap`() {
+            for (density in DENSITIES) {
+                for (sizeDp in SIZES_DP) {
+                    val sizePx = dialPixelSize(sizeDp, density)
+
+                    assertTrue(
+                        sizePx in MIN_DIAL_SIZE_PX..MAX_DIAL_SIZE_PX,
+                        "${sizeDp}dp at density $density gave $sizePx",
+                    )
+                }
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("The square the widget gives the Dial")
+    inner class WidgetSquare {
+
+        @Test
+        fun `is the short side of the box the widget ends up with`() {
+            // A widget three cells wide and two tall, in portrait.
+            assertEquals(180f, widgetSquareDp(180, 250, 110, 180))
+        }
+
+        @Test
+        fun `follows the widget as it is dragged bigger`() {
+            val small = widgetSquareDp(110, 180, 110, 110)
+            val large = widgetSquareDp(250, 320, 250, 250)
+
+            assertTrue(large > small, "a bigger widget must ask for a bigger Dial")
+            assertEquals(250f, large)
+        }
+
+        @Test
+        fun `takes whichever orientation gives the Dial the most room`() {
+            // Rotating the phone does not change the options, so nothing
+            // redraws: the Dial has to be drawn for the roomier of the two.
+            val landscapeIsRoomier = widgetSquareDp(
+                minWidthDp = 150,
+                maxWidthDp = 300,
+                minHeightDp = 260,
+                maxHeightDp = 160,
+            )
+
+            assertEquals(260f, landscapeIsRoomier)
+        }
+
+        @Test
+        fun `is never smaller than the size declared to the launcher`() {
+            assertEquals(MIN_WIDGET_SIZE_DP, widgetSquareDp(0, 0, 0, 0))
+            assertEquals(MIN_WIDGET_SIZE_DP, widgetSquareDp(-1, -1, -1, -1))
+            assertEquals(MIN_WIDGET_SIZE_DP, widgetSquareDp(40, 40, 40, 40))
         }
     }
 
@@ -61,15 +115,22 @@ class WidgetTest {
 
         @Test
         fun `follows the screen density while it is under the cap`() {
-            assertEquals(110, dialPixelSize(WIDGET_SIZE_DP, density = 1f))
-            assertEquals(165, dialPixelSize(WIDGET_SIZE_DP, density = 1.5f))
-            assertEquals(220, dialPixelSize(WIDGET_SIZE_DP, density = 2f))
+            assertEquals(110, dialPixelSize(MIN_WIDGET_SIZE_DP, density = 1f))
+            assertEquals(165, dialPixelSize(MIN_WIDGET_SIZE_DP, density = 1.5f))
+            assertEquals(220, dialPixelSize(MIN_WIDGET_SIZE_DP, density = 2f))
         }
 
         @Test
-        fun `stops at the cap on a dense screen`() {
-            assertEquals(MAX_DIAL_SIZE_PX, dialPixelSize(WIDGET_SIZE_DP, density = 3f))
-            assertEquals(MAX_DIAL_SIZE_PX, dialPixelSize(WIDGET_SIZE_DP, density = 4f))
+        fun `is drawn pixel for pixel on the phone this is built for`() {
+            // 1080 x 2400 at a density of 2.625 is 411dp across, so the widest
+            // widget that phone can hold is still under the cap.
+            assertEquals(1078, dialPixelSize(411f, density = 2.625f))
+        }
+
+        @Test
+        fun `stops at the cap beyond that`() {
+            assertEquals(MAX_DIAL_SIZE_PX, dialPixelSize(411f, density = 3.5f))
+            assertEquals(MAX_DIAL_SIZE_PX, dialPixelSize(800f, density = 2f))
         }
 
         @Test
@@ -94,21 +155,51 @@ class WidgetTest {
     }
 
     @Nested
+    @DisplayName("A refused update")
+    inner class Refusal {
+
+        @Test
+        fun `is retried smaller until there is nothing smaller to try`() {
+            var size: Int? = MAX_DIAL_SIZE_PX
+            val tried = mutableListOf<Int>()
+            while (size != null) {
+                tried += size
+                size = smallerDialSize(size)
+            }
+
+            assertEquals(MIN_DIAL_SIZE_PX, tried.last(), "the last try must be the smallest Dial")
+            assertTrue(tried.size in 2..8, "${tried.size} tries is not a sensible retry")
+            assertTrue(tried.zipWithNext().all { (a, b) -> b < a }, "each try must be smaller: $tried")
+        }
+
+        @Test
+        fun `gives up at the smallest Dial rather than shrinking to nothing`() {
+            assertNull(smallerDialSize(MIN_DIAL_SIZE_PX))
+            assertNull(smallerDialSize(1))
+        }
+    }
+
+    @Nested
     @DisplayName("What the launcher is told")
     inner class LauncherDeclarations {
 
         @Test
-        fun `the widget is offered at the size the bitmap is drawn for`() {
-            val declared = "${WIDGET_SIZE_DP.toInt()}dp"
+        fun `the widget can be dragged both ways`() {
+            assertTrue(widgetInfo.contains("""android:resizeMode="horizontal|vertical""""))
+        }
 
-            assertTrue(
-                widgetInfo.contains("""android:minWidth="$declared""""),
-                "widget_info.xml and WIDGET_SIZE_DP disagree",
-            )
-            assertTrue(
-                widgetInfo.contains("""android:minHeight="$declared""""),
-                "widget_info.xml and WIDGET_SIZE_DP disagree",
-            )
+        @Test
+        fun `it lands at two cells square and goes no smaller`() {
+            val declared = "${MIN_WIDGET_SIZE_DP.toInt()}dp"
+
+            for (attribute in listOf("minWidth", "minHeight", "minResizeWidth", "minResizeHeight")) {
+                assertTrue(
+                    widgetInfo.contains("""android:$attribute="$declared""""),
+                    "widget_info.xml and MIN_WIDGET_SIZE_DP disagree on $attribute",
+                )
+            }
+            assertTrue(widgetInfo.contains("""android:targetCellWidth="2""""))
+            assertTrue(widgetInfo.contains("""android:targetCellHeight="2""""))
         }
 
         @Test
@@ -129,6 +220,13 @@ class WidgetTest {
         }
 
         @Test
+        fun `the square Dial is centred in a widget that is not square`() {
+            assertTrue(layout.contains("""android:scaleType="fitCenter""""))
+            assertTrue(layout.contains("""android:layout_width="match_parent""""))
+            assertTrue(layout.contains("""android:layout_height="match_parent""""))
+        }
+
+        @Test
         fun `the layout has no background, so the Dial sits on the wallpaper`() {
             assertNull(Regex("""android:background""").find(layout)?.value)
         }
@@ -140,15 +238,38 @@ class WidgetTest {
             assertTrue(manifest.contains("""android:resource="@xml/widget_info""""))
             assertTrue(widgetInfo.contains("""android:initialLayout="@layout/widget_dial""""))
         }
+
+        @Test
+        fun `the widget redraws itself when it is resized`() {
+            val source = appSource("CountdownWidget.kt")
+
+            assertTrue(
+                source.contains("override fun onAppWidgetOptionsChanged"),
+                "nothing would redraw the Dial after a resize",
+            )
+            assertTrue(
+                source.contains("OPTION_APPWIDGET_MIN_WIDTH"),
+                "the new size has to come from the widget's options",
+            )
+        }
     }
 
     private companion object {
         /** Densities from the lowest Android ships to well past the densest phone. */
         val DENSITIES = listOf(0.75f, 1f, 1.5f, 2f, 2.625f, 3f, 3.5f, 4f, 8f, 100f)
 
-        val BUDGET_BYTES = (TRANSACTION_BUFFER_BYTES * DIAL_BUFFER_SHARE).toLong()
+        /** Widget sizes from two cells to a widget filling a tablet. */
+        val SIZES_DP = listOf(110f, 180f, 250f, 320f, 411f, 600f, 800f, 4000f)
 
-        val HALF_THE_BUFFER = TRANSACTION_BUFFER_BYTES / 2
+        /** Screens in pixels: an old phone, current phones, a tablet, a foldable. */
+        val SCREENS = listOf(
+            720 to 1280,
+            1080 to 1920,
+            1080 to 2400,
+            1440 to 3120,
+            1600 to 2560,
+            2208 to 1840,
+        )
 
         val widgetInfo: String get() = withoutComments(appFile("src/main/res/xml/widget_info.xml"))
 

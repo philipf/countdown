@@ -238,6 +238,26 @@ class DialLayoutTest {
         }
 
         @Test
+        fun `leaves the Dial centred in the bitmap once it is dropped`() {
+            for (size in SIZES) {
+                val layout = dialLayout(size, hasLabel = true, hasTitle = true)
+                if (layout.drawTitle) continue
+
+                val centre = size / 2f
+                assertEquals(centre, layout.centreX, "size $size: the Dial shifted sideways")
+                assertEquals(centre, layout.centreY, "size $size: the Dial shifted up or down")
+            }
+        }
+
+        @Test
+        fun `is kept once the Dial is big enough to read it`() {
+            assertTrue(
+                dialLayout(288, hasLabel = true, hasTitle = true).drawTitle,
+                "the smallest widget on a dense screen is big enough for a title",
+            )
+        }
+
+        @Test
         fun `fits across the bitmap`() {
             val layout = dialLayout(400, hasLabel = true, hasTitle = true)
 
