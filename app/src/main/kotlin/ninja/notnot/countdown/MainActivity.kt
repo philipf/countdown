@@ -2,18 +2,24 @@ package ninja.notnot.countdown
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -21,17 +27,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +53,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 
@@ -56,36 +69,153 @@ private val WALLPAPER_STAND_IN = Color(0xFF37474F)
 private val PREVIEW_SIZE = 240.dp
 
 /**
- * The app's single screen: the Dial preview on top, the fields that set it
- * below. There is no Save button — every edit is written as it is made.
+ * The app's two screens: the list of Events, and the editor behind whichever row
+ * is tapped. The editor is the screen the app used to open on, unchanged apart
+ * from being reached through a row and having somewhere to go back to.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val store = EventStore(this)
-        // Read once, here rather than in composition: the screen is the only
-        // writer, so what it holds and what is on disk cannot drift apart. The
-        // id comes with it and every edit is written back under it, so the
-        // screen edits the Event it opened on rather than making a new one each
-        // time.
-        val (id, stored) = store.readTheOneEvent()
         setContent {
             MaterialTheme {
-                ConfigScreen(
-                    initial = stored,
-                    today = LocalDate.now(),
-                    onChange = { store.write(id, it) },
-                )
+                Countdown(store = store, today = LocalDate.now())
             }
         }
     }
 }
 
+/**
+ * The Events, and which one is open. Both screens are held here rather than in
+ * two activities: there is one reader and one writer of the Events, so what is
+ * held and what is on disk cannot drift apart, and coming back from the editor
+ * shows the change without going to the disk for it.
+ */
 @Composable
-private fun ConfigScreen(
+private fun Countdown(store: EventStore, today: LocalDate) {
+    // Read once, as the screen is built. Nothing else writes an Event while the
+    // app is in front, so there is nothing to notice happening behind this.
+    var events by remember { mutableStateOf(store.read()) }
+    // Held as a plain string, so a rotation in the editor comes back to the same
+    // Event rather than to the list.
+    var openId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    fun write(id: EventId, stored: StoredEvent) {
+        store.write(id, stored)
+        events = events + (id to stored)
+    }
+
+    val open = openId?.let(::EventId)
+    if (open == null) {
+        EventListScreen(
+            events = eventsInOrder(events),
+            today = today,
+            // An added Event has no date yet. It is written immediately, so it
+            // is still there if the owner puts the phone down before dating it,
+            // and it waits at the top of the list saying it needs one.
+            onAdd = { write(store.newEventId(), StoredEvent.NOTHING_SET) },
+            onOpen = { openId = it.value },
+        )
+    } else {
+        // Keyed on the Event, so opening a second row starts the editor on that
+        // Event rather than on the fields the last one left in place.
+        key(open) {
+            EventEditor(
+                // An id with no Event behind it is one that was never written,
+                // which nothing here can produce. It is read as an Event with
+                // nothing set rather than as a reason to crash.
+                initial = events[open] ?: StoredEvent.NOTHING_SET,
+                today = today,
+                onChange = { write(open, it) },
+                onBack = { openId = null },
+            )
+        }
+        // The editor is a screen rather than an activity, so back has to be told
+        // that it leaves the editor and not the app.
+        BackHandler { openId = null }
+    }
+}
+
+/**
+ * Every Event, soonest first. Each row is its title and how soon it is, which is
+ * enough to find the one being looked for; everything else about an Event is on
+ * the screen behind it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EventListScreen(
+    events: List<ListedEvent>,
+    today: LocalDate,
+    onAdd: () -> Unit,
+    onOpen: (EventId) -> Unit,
+) {
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Countdown") }) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(onClick = onAdd) { Text("Add an Event") }
+        },
+    ) { insets ->
+        if (events.isEmpty()) {
+            // A first run has nothing to show, so it says what to do instead of
+            // leaving the owner looking at an empty screen.
+            Box(
+                modifier = Modifier.fillMaxSize().padding(insets).padding(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "Nothing to count to yet.\nAdd an Event and pick its date.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
+                items(events, key = { it.id.value }) { listed ->
+                    EventRow(listed = listed, today = today, onClick = { onOpen(listed.id) })
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+/** One Event as a row: what it is called, and how soon it is. */
+@Composable
+private fun EventRow(listed: ListedEvent, today: LocalDate, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            rowTitle(listed.stored),
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            howSoon(listed.stored, today),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * One Event's screen: the Dial preview on top, the fields that set it below.
+ * There is no Save button — every edit is written as it is made.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EventEditor(
     initial: StoredEvent,
     today: LocalDate,
     onChange: (StoredEvent) -> Unit,
+    onBack: () -> Unit,
 ) {
     var stored by remember { mutableStateOf(initial) }
     var pickingDate by remember { mutableStateOf(false) }
@@ -94,8 +224,20 @@ private fun ConfigScreen(
         stored = change(stored).also(onChange)
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(rowTitle(stored)) },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+            )
+        },
+    ) { insets ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(insets)
+                .verticalScroll(rememberScrollState()),
+        ) {
             DialPreview(dialState(stored.toEvent(), today))
 
             Column(

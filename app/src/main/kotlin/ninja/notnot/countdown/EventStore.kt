@@ -31,21 +31,6 @@ class EventStore(context: Context) {
      */
     fun read(): Map<EventId, StoredEvent> = storedEventsFrom(carriedOver(values()))
 
-    /**
-     * The one Event the app and the widget still show, and the id to write it
-     * back under: whichever id is listed first, because there is only one of
-     * them and nothing chooses between many yet, or a fresh id with nothing
-     * under it when there is no Event at all.
-     *
-     * Temporary. The app's list is what picks an Event to edit and a widget's
-     * binding is what picks the Event it shows; both replace this.
-     */
-    fun readTheOneEvent(): Pair<EventId, StoredEvent> {
-        val events = read()
-        val id = events.keys.firstOrNull() ?: newEventId()
-        return id to (events[id] ?: StoredEvent.NOTHING_SET)
-    }
-
     /** Writes the Event with [id], listing the id if this is the first time. */
     fun write(id: EventId, stored: StoredEvent) {
         val before = values()

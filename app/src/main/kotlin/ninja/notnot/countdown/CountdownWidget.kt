@@ -13,14 +13,14 @@ import java.time.LocalDate
 /**
  * The home screen widget.
  *
- * Every copy shows the same Event, so a copy has nothing of its own to
- * configure: there is no configuration activity, no per-instance state, and
- * every copy of a given size is sent the same Dial. Storage holds many Events
- * now, but nothing chooses between them until a copy is bound to one when it is
- * placed (ADR-0009).
+ * Every copy shows the same Event — whichever one the list puts first — so a
+ * copy has nothing of its own to configure: there is no configuration activity,
+ * no per-instance state, and every copy of a given size is sent the same Dial.
+ * Which Event that is, is arbitrary, and it stands only until a copy is bound to
+ * an Event when it is placed (ADR-0009).
  *
  * The layout is a single `ImageView` holding the bitmap from [renderDial], as
- * ADR-0002 has it, so the widget and the config screen preview cannot disagree.
+ * ADR-0002 has it, so the widget and the editor's preview cannot disagree.
  * A bitmap cannot be resized after the fact, so the Dial is drawn again at the
  * new pixel size whenever the widget is dragged to a new one. Everything this
  * file decides beyond that is in [widgetSquareDp] and [dialPixelSize].
@@ -82,8 +82,13 @@ private fun drawDial(context: Context, manager: AppWidgetManager, appWidgetIds: 
 
     // Read on the calling thread. This runs in a broadcast receiver, where
     // blocking is simpler and safer than a coroutine.
-    val (_, stored) = EventStore(context).readTheOneEvent()
-    val state = dialState(stored.toEvent(), LocalDate.now())
+    //
+    // Whichever Event the list puts first, which is the one the owner is nearest
+    // to. Temporary: a widget shows the Event it was bound to when it was placed
+    // (ADR-0009), and until that binding exists there is nothing here to choose
+    // with. No Event at all draws the same Dial as a first run.
+    val stored = eventsInOrder(EventStore(context).read()).firstOrNull()?.stored
+    val state = dialState(stored?.toEvent(), LocalDate.now())
     val density = context.resources.displayMetrics.density
 
     // Every copy shows the same Event, so copies of the same size still share

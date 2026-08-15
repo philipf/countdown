@@ -1,7 +1,8 @@
 # Countdown
 
-An Android app that shows, on the home screen, how many days are left until one
-date. See `CONTEXT.md` for the vocabulary and `docs/PRD.md` for the spec.
+An Android app that shows, on the home screen, how many days are left until the
+dates you care about. See `CONTEXT.md` for the vocabulary and `docs/PRD.md` for
+the spec.
 
 ## Setup
 

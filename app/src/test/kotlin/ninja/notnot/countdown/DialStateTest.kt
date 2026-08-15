@@ -369,6 +369,7 @@ class DialStateTest {
             "Event.kt",
             "DialState.kt",
             "EventStorage.kt",
+            "EventList.kt",
             "EventDates.kt",
         )
 
