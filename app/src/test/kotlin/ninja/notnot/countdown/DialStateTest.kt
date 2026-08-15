@@ -348,7 +348,13 @@ class DialStateTest {
     }
 
     private companion object {
-        val DOMAIN_SOURCES = listOf("Accent.kt", "Event.kt", "DialState.kt")
+        val DOMAIN_SOURCES = listOf(
+            "Accent.kt",
+            "Event.kt",
+            "DialState.kt",
+            "EventStorage.kt",
+            "EventDates.kt",
+        )
 
         fun date(iso: String): LocalDate = LocalDate.parse(iso)
 

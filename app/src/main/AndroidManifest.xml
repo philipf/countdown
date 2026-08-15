@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Backup is off: the Event is one date, and restoring it onto a new phone is
+      not worth the surface. allowBackup stops the cloud backup, but from Android
+      12 it does not stop a device-to-device transfer, so the extraction rules
+      turn that off as well.
+    -->
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="@string/app_name"
         android:theme="@style/Theme.Countdown">
 
