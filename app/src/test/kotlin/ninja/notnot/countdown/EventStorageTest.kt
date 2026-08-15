@@ -1,15 +1,19 @@
 package ninja.notnot.countdown
 
 import java.time.LocalDate
+import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
 /**
- * What is stored, what is read back, and what each edit does to the Anchor Date.
- * Everything here is a value in and a value out; nothing touches a disk.
+ * What is stored, what is read back, what each edit does to the Anchor Date, and
+ * how many Events share one file. Everything here is a value in and a value out;
+ * nothing touches a disk.
  */
 class EventStorageTest {
 
@@ -234,7 +238,192 @@ class EventStorageTest {
         }
     }
 
+    @Nested
+    @DisplayName("Many Events in one file")
+    inner class ManyEvents {
+
+        @Test
+        fun `several Events are read back, each with its own fields`() {
+            assertEquals(
+                mapOf(CHRISTMAS_ID to christmas(), HOLIDAY_ID to holiday()),
+                read(twoEvents()),
+            )
+        }
+
+        @Test
+        fun `editing one Event leaves the other's fields and Anchor Date alone`() {
+            val edited = twoEvents().withEvent(
+                HOLIDAY_ID,
+                holiday().withEventDate(date("2026-10-01"), today = date("2026-08-16")),
+            )
+
+            assertEquals(christmas(), read(edited)[CHRISTMAS_ID])
+            assertEquals(date("2026-08-16"), read(edited)[HOLIDAY_ID]?.anchorDate)
+        }
+
+        @Test
+        fun `renaming one Event does not rename another`() {
+            val edited = twoEvents().withEvent(HOLIDAY_ID, holiday().withTitle("Two weeks off"))
+
+            assertEquals("Christmas", read(edited)[CHRISTMAS_ID]?.title)
+            assertEquals("Two weeks off", read(edited)[HOLIDAY_ID]?.title)
+        }
+
+        @Test
+        fun `writing an Event again does not list it twice`() {
+            val written = twoEvents().withEvent(CHRISTMAS_ID, christmas().withAccent(Accent.BLACK))
+
+            assertEquals(listOf(CHRISTMAS_ID, HOLIDAY_ID), eventIdsFrom(written))
+            assertEquals(Accent.BLACK, read(written)[CHRISTMAS_ID]?.accent)
+        }
+
+        @Test
+        fun `each Event's fields are kept under its own id`() {
+            val values = twoEvents()
+
+            assertEquals("2027-12-25", values["event.${CHRISTMAS_ID.value}.eventDate"])
+            assertEquals("2026-09-01", values["event.${HOLIDAY_ID.value}.eventDate"])
+        }
+
+        @Test
+        fun `fields belonging to an id that is not listed read as nothing`() {
+            // What a write that was interrupted leaves behind: the fields are
+            // there and the id never made it into the list.
+            val orphaned = twoEvents() + (EventKeys.EVENTS to CHRISTMAS_ID.value)
+
+            assertEquals(mapOf(CHRISTMAS_ID to christmas()), read(orphaned))
+        }
+
+        @Test
+        fun `nothing listed is no Events at all, whatever fields are lying about`() {
+            assertEquals(emptyMap<EventId, StoredEvent>(), read(twoEvents() - EventKeys.EVENTS))
+        }
+
+        @Test
+        fun `an id listed with no fields is an Event with nothing set`() {
+            val values = mapOf<String, String?>(EventKeys.EVENTS to CHRISTMAS_ID.value)
+
+            assertEquals(mapOf(CHRISTMAS_ID to StoredEvent.NOTHING_SET), read(values))
+        }
+    }
+
+    @Nested
+    @DisplayName("Event ids")
+    inner class Ids {
+
+        @Test
+        fun `are safe to put in the middle of a key`() {
+            val random = Random(SEED)
+
+            repeat(DRAWS) {
+                val id = newEventId(random = random).value
+
+                assertTrue(id.matches(Regex("[a-z0-9]+")), "<$id> cannot be part of a key")
+            }
+        }
+
+        @Test
+        fun `name the keys the Event's fields are kept under`() {
+            assertEquals("event.abc.title", EventKeys.keyFor(EventId("abc"), EventKeys.TITLE))
+        }
+
+        @Test
+        fun `are never handed out twice, even when nothing remembers the last one`() {
+            // Nothing is taken on any of these draws, which is how it is once the
+            // Event that held an id has gone: what keeps ids apart is the size of
+            // the draw, not a record of the ones handed out.
+            val random = Random(SEED)
+
+            val drawn = List(DRAWS) { newEventId(random = random) }
+
+            assertEquals(DRAWS, drawn.toSet().size, "an id came up twice")
+        }
+
+        @Test
+        fun `are never the id of an Event that already exists`() {
+            // The same seed would hand out the same id again, so the only way
+            // past this is to draw until the id is free.
+            val taken = newEventId(random = Random(SEED))
+
+            val next = newEventId(taken = setOf(taken), random = Random(SEED))
+
+            assertNotEquals(taken, next)
+        }
+    }
+
+    @Nested
+    @DisplayName("Upgrading from the one Event v1 stored")
+    inner class UpgradingFromV1 {
+
+        @Test
+        fun `keeps the Event, with its date, title, Accent and Anchor Date`() {
+            val carried = carriedOver()
+
+            assertEquals(mapOf(FRESH_ID to christmas()), read(carried))
+        }
+
+        @Test
+        fun `leaves the Dial showing the same thing`() {
+            val today = date("2026-08-20")
+            val carried = carriedOver()
+
+            assertEquals(
+                dialState(storedEventFrom(v1Store()).toEvent(), today),
+                dialState(read(carried).getValue(FRESH_ID).toEvent(), today),
+            )
+        }
+
+        @Test
+        fun `takes the old unprefixed keys away`() {
+            val carried = carriedOver()
+
+            for (key in EventKeys.ALL) {
+                assertNull(carried[key], "$key was left behind")
+            }
+        }
+
+        @Test
+        fun `happens once, because afterwards there is nothing of v1 to read`() {
+            val carried = carriedOver()
+
+            assertNull(v1EventCarriedOver(carried, EventId("second")))
+        }
+
+        @Test
+        fun `is not attempted on a first run, where there is nothing at all`() {
+            assertNull(v1EventCarriedOver(emptyMap(), FRESH_ID))
+        }
+
+        @Test
+        fun `is not attempted for a v1 store that never got as far as a date`() {
+            val started = mapOf<String, String?>(
+                EventKeys.TITLE to "Christmas",
+                EventKeys.ACCENT to "RED",
+            )
+
+            assertNull(v1EventCarriedOver(started, FRESH_ID))
+        }
+
+        @Test
+        fun `leaves the Events that are already stored the new way alone`() {
+            val carried = carriedOver(v1Store() + twoEvents())
+
+            assertEquals(christmas(), read(carried)[CHRISTMAS_ID])
+            assertEquals(holiday(), read(carried)[HOLIDAY_ID])
+        }
+    }
+
     private companion object {
+        val CHRISTMAS_ID = EventId("one")
+        val HOLIDAY_ID = EventId("two")
+        val FRESH_ID = EventId("fresh")
+
+        /** Fixed, so a test that draws ids says the same thing on every run. */
+        const val SEED = 20260816
+
+        /** Enough draws that two the same would show up. */
+        const val DRAWS = 10_000
+
         fun date(iso: String): LocalDate = LocalDate.parse(iso)
 
         fun anchoredEvent(title: String = "Christmas") = StoredEvent(
@@ -243,5 +432,39 @@ class EventStorageTest {
             title = title,
             accent = Accent.BLUE,
         )
+
+        fun christmas() = StoredEvent(
+            eventDate = date("2027-12-25"),
+            anchorDate = date("2026-08-15"),
+            title = "Christmas",
+            accent = Accent.RED,
+        )
+
+        fun holiday() = StoredEvent(
+            eventDate = date("2026-09-01"),
+            anchorDate = date("2026-08-01"),
+            title = "Holiday",
+            accent = Accent.BLACK,
+        )
+
+        /** A file holding two Events, as it would be after writing them one at a time. */
+        fun twoEvents(): Map<String, String?> = emptyMap<String, String?>()
+            .withEvent(CHRISTMAS_ID, christmas())
+            .withEvent(HOLIDAY_ID, holiday())
+
+        /** A file as v1 left it: the one Event, under keys with no id in them. */
+        fun v1Store(): Map<String, String?> = mapOf(
+            EventKeys.EVENT_DATE to "2027-12-25",
+            EventKeys.ANCHOR_DATE to "2026-08-15",
+            EventKeys.TITLE to "Christmas",
+            EventKeys.ACCENT to "RED",
+        )
+
+        fun read(values: Map<String, String?>): Map<EventId, StoredEvent> =
+            storedEventsFrom(values)
+
+        /** [values] after v1's Event is carried over, which here there always is. */
+        fun carriedOver(values: Map<String, String?> = v1Store()): Map<String, String?> =
+            checkNotNull(v1EventCarriedOver(values, FRESH_ID)) { "nothing was carried over" }
     }
 }

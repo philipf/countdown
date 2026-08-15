@@ -3,7 +3,9 @@ package ninja.notnot.countdown
 import java.time.LocalDate
 
 /**
- * The dated thing being counted towards. There is one, app-wide.
+ * One of the dated things being counted towards. Which Event this is comes from
+ * the [EventId] it is stored under, so nothing that only draws an Event has to
+ * carry one.
  *
  * @param eventDate the date being counted towards. A date, with no time of day.
  * @param anchorDate the date the Progress Arc measures from: the day the Event

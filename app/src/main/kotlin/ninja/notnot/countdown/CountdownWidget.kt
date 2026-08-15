@@ -13,9 +13,11 @@ import java.time.LocalDate
 /**
  * The home screen widget.
  *
- * There is one Event app-wide, so a copy of the widget has nothing of its own to
+ * Every copy shows the same Event, so a copy has nothing of its own to
  * configure: there is no configuration activity, no per-instance state, and
- * every copy of a given size is sent the same Dial.
+ * every copy of a given size is sent the same Dial. Storage holds many Events
+ * now, but nothing chooses between them until a copy is bound to one when it is
+ * placed (ADR-0009).
  *
  * The layout is a single `ImageView` holding the bitmap from [renderDial], as
  * ADR-0002 has it, so the widget and the config screen preview cannot disagree.
@@ -80,7 +82,8 @@ private fun drawDial(context: Context, manager: AppWidgetManager, appWidgetIds: 
 
     // Read on the calling thread. This runs in a broadcast receiver, where
     // blocking is simpler and safer than a coroutine.
-    val state = dialState(EventStore(context).read().toEvent(), LocalDate.now())
+    val (_, stored) = EventStore(context).readTheOneEvent()
+    val state = dialState(stored.toEvent(), LocalDate.now())
     val density = context.resources.displayMetrics.density
 
     // Every copy shows the same Event, so copies of the same size still share

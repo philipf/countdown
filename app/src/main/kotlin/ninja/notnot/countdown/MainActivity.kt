@@ -64,14 +64,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val store = EventStore(this)
         // Read once, here rather than in composition: the screen is the only
-        // writer, so what it holds and what is on disk cannot drift apart.
-        val stored = store.read()
+        // writer, so what it holds and what is on disk cannot drift apart. The
+        // id comes with it and every edit is written back under it, so the
+        // screen edits the Event it opened on rather than making a new one each
+        // time.
+        val (id, stored) = store.readTheOneEvent()
         setContent {
             MaterialTheme {
                 ConfigScreen(
                     initial = stored,
                     today = LocalDate.now(),
-                    onChange = store::write,
+                    onChange = { store.write(id, it) },
                 )
             }
         }
