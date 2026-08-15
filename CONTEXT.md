@@ -1,13 +1,19 @@
 # Countdown
 
 A personal Android app that shows, on the home screen, how many days are left
-until one date the user cares about.
+until the dates the user cares about.
 
 ## Language
 
 **Event**:
-The dated thing being counted towards. There is one, app-wide.
+One of the dated things being counted towards. There are many, and each keeps its
+own date, title, Accent and Progress Arc.
 _Avoid_: Countdown, Reminder, Occasion, Appointment
+
+**Bound Event**:
+The Event a copy of the widget shows, chosen when that copy is placed and fixed
+for as long as it is there.
+_Avoid_: Assigned event, linked event, the widget's event
 
 **Event Date**:
 The calendar date of the Event. No time of day. Read in the device's local
