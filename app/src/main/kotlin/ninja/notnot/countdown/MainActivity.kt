@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -105,6 +106,11 @@ private fun Countdown(store: EventStore, today: LocalDate) {
         events = events + (id to stored)
     }
 
+    fun delete(id: EventId) {
+        store.delete(id)
+        events = events - id
+    }
+
     val open = openId?.let(::EventId)
     if (open == null) {
         EventListScreen(
@@ -115,6 +121,7 @@ private fun Countdown(store: EventStore, today: LocalDate) {
             // and it waits at the top of the list saying it needs one.
             onAdd = { write(store.newEventId(), StoredEvent.NOTHING_SET) },
             onOpen = { openId = it.value },
+            onDelete = { delete(it) },
         )
     } else {
         // Keyed on the Event, so opening a second row starts the editor on that
@@ -139,7 +146,8 @@ private fun Countdown(store: EventStore, today: LocalDate) {
 /**
  * Every Event, soonest first. Each row is its title and how soon it is, which is
  * enough to find the one being looked for; everything else about an Event is on
- * the screen behind it.
+ * the screen behind it. A row is also where an Event is taken off the list once
+ * it no longer matters.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,7 +156,12 @@ private fun EventListScreen(
     today: LocalDate,
     onAdd: () -> Unit,
     onOpen: (EventId) -> Unit,
+    onDelete: (EventId) -> Unit,
 ) {
+    // Which Event has been asked about, if any. Nothing is deleted until the
+    // asking is answered, so backing out leaves the Event exactly as it was.
+    var asking by remember { mutableStateOf<EventId?>(null) }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Countdown") }) },
         floatingActionButton = {
@@ -171,22 +184,46 @@ private fun EventListScreen(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = insets) {
                 items(events, key = { it.id.value }) { listed ->
-                    EventRow(listed = listed, today = today, onClick = { onOpen(listed.id) })
+                    EventRow(
+                        listed = listed,
+                        today = today,
+                        onClick = { onOpen(listed.id) },
+                        onDelete = { asking = listed.id },
+                    )
                     HorizontalDivider()
                 }
             }
         }
     }
+
+    // Found again rather than held, so the Event that has just gone takes the
+    // question with it instead of leaving it asking about nothing.
+    val asked = asking?.let { id -> events.firstOrNull { it.id == id } }
+    if (asked != null) {
+        ConfirmDelete(
+            title = rowTitle(asked.stored),
+            onConfirm = {
+                asking = null
+                onDelete(asked.id)
+            },
+            onDismiss = { asking = null },
+        )
+    }
 }
 
-/** One Event as a row: what it is called, and how soon it is. */
+/** One Event as a row: what it is called, how soon it is, and the way to be rid of it. */
 @Composable
-private fun EventRow(listed: ListedEvent, today: LocalDate, onClick: () -> Unit) {
+private fun EventRow(
+    listed: ListedEvent,
+    today: LocalDate,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -202,7 +239,32 @@ private fun EventRow(listed: ListedEvent, today: LocalDate, onClick: () -> Unit)
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        TextButton(
+            onClick = onDelete,
+            // Every row's button says the same word, so out loud it says which
+            // Event it would take away.
+            modifier = Modifier.semantics {
+                contentDescription = "Delete ${rowTitle(listed.stored)}"
+            },
+        ) {
+            Text("Delete")
+        }
     }
+}
+
+/**
+ * What is asked before an Event goes. There is no undo and nothing is backed up,
+ * so the dialog says so rather than leaving the owner to find out.
+ */
+@Composable
+private fun ConfirmDelete(title: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete $title?") },
+        text = { Text("This cannot be undone.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /**

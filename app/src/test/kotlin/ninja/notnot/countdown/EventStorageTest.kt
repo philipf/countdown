@@ -308,6 +308,72 @@ class EventStorageTest {
     }
 
     @Nested
+    @DisplayName("Deleting an Event")
+    inner class Deleting {
+
+        @Test
+        fun `the Event is gone`() {
+            val left = twoEvents().withoutEvent(HOLIDAY_ID)
+
+            assertNull(read(left)[HOLIDAY_ID])
+            assertEquals(listOf(CHRISTMAS_ID), eventIdsFrom(left))
+        }
+
+        @Test
+        fun `its keys go with it`() {
+            val left = twoEvents().withoutEvent(HOLIDAY_ID)
+
+            for (field in EventKeys.ALL) {
+                assertNull(left[EventKeys.keyFor(HOLIDAY_ID, field)], "$field was left behind")
+            }
+        }
+
+        @Test
+        fun `every other Event is readable and unchanged`() {
+            val before = twoEvents()
+
+            val left = before.withoutEvent(HOLIDAY_ID)
+
+            assertEquals(mapOf(CHRISTMAS_ID to christmas()), read(left))
+            for (field in EventKeys.ALL) {
+                val key = EventKeys.keyFor(CHRISTMAS_ID, field)
+                assertEquals(before[key], left[key], key)
+            }
+        }
+
+        @Test
+        fun `deleting the last Event leaves the file as it was before there were any`() {
+            val left = twoEvents().withoutEvent(CHRISTMAS_ID).withoutEvent(HOLIDAY_ID)
+
+            assertEquals(emptyMap<String, String?>(), left)
+        }
+
+        @Test
+        fun `deleting the last Event leaves nothing to list, so the list says what to do`() {
+            val left = twoEvents().withoutEvent(CHRISTMAS_ID).withoutEvent(HOLIDAY_ID)
+
+            assertEquals(emptyList<ListedEvent>(), eventsInOrder(read(left)))
+        }
+
+        @Test
+        fun `deleting an Event that is not there changes nothing`() {
+            assertEquals(twoEvents(), twoEvents().withoutEvent(EventId("neverstored")))
+        }
+
+        @Test
+        fun `nothing is left for an Event stored under the same id to pick up`() {
+            // Ids are never handed out twice, so this is not something the app
+            // does. It is what says the fields are gone rather than merely
+            // unlisted.
+            val left = twoEvents().withoutEvent(HOLIDAY_ID)
+
+            val again = left.withEvent(HOLIDAY_ID, StoredEvent.NOTHING_SET)
+
+            assertEquals(StoredEvent.NOTHING_SET, read(again)[HOLIDAY_ID])
+        }
+    }
+
+    @Nested
     @DisplayName("Event ids")
     inner class Ids {
 

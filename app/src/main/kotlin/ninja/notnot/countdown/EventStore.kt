@@ -43,6 +43,19 @@ class EventStore(context: Context) {
         drawDialForToday(appContext)
     }
 
+    /**
+     * Takes the Event with [id] away, along with the keys it was kept under.
+     * There is no undo and nothing is backed up, so the asking is done before
+     * this is called.
+     */
+    fun delete(id: EventId) {
+        val before = values()
+        save(before, before.withoutEvent(id))
+        // The home screen may be showing the Event that has just gone, so a
+        // delete redraws for the same reason a write does.
+        drawDialForToday(appContext)
+    }
+
     /** An id no Event has. */
     fun newEventId(): EventId = newEventId(taken = eventIdsFrom(values()).toSet())
 

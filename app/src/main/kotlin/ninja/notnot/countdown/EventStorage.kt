@@ -169,6 +169,28 @@ fun Map<String, String?>.withEvent(id: EventId, stored: StoredEvent): Map<String
 }
 
 /**
+ * The whole file with the Event with [id] taken away: its id off the list and
+ * its four keys removed. Every key that is not this Event's is left as it was,
+ * so a delete cannot reach another Event's fields.
+ *
+ * Being listed is what makes an Event exist (ADR-0008), so a delete that was
+ * interrupted leaves fields nothing reads rather than half an Event, the same
+ * way an interrupted write does.
+ *
+ * Deleting the last Event takes the list of ids away with it, so a file with no
+ * Events in it looks the way it did before there were any.
+ */
+fun Map<String, String?>.withoutEvent(id: EventId): Map<String, String?> {
+    val left = eventIdsFrom(this) - id
+    val fieldsGone = this - EventKeys.ALL.map { EventKeys.keyFor(id, it) }.toSet()
+    return if (left.isEmpty()) {
+        fieldsGone - EventKeys.EVENTS
+    } else {
+        fieldsGone + (EventKeys.EVENTS to listedAs(left))
+    }
+}
+
+/**
  * The file with v1's one Event carried over: the unprefixed fields become the
  * Event with [id] and are taken away, so the read after this one finds it stored
  * the new way and never looks at that shape again. Null when there is nothing to
